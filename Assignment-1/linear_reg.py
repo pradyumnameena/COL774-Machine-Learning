@@ -37,17 +37,25 @@ def gradient(x,y,theta):
   grad2 = np.asmatrix(np.zeros((x.shape[0],x.shape[1]),dtype=float))
   for i in range (len(diff)):
    for j in range (x.shape[1]):
-	 grad2[i,j] = x[i,j]*diff[i,0]	
+	   grad2[i,j] = x[i,j]*diff[i,0]	
   grad = np.sum(grad2,axis=0).transpose()
   return grad
+
+def shouldstop(x,y,theta,num_iter):
+  ans = True
+  if(num_iter>0):
+    ans = False
+  return ans
 
 def algo(x,y,theta,alpha):
   num_iter = 1000
   alpha/=len(x)
-  while(num_iter!=0):
+  stopping_cond = False
+  while stopping_cond==False:
     grad = gradient(x,y,theta)
     theta-=alpha*grad
     num_iter-=1
+    stopping_cond = shouldstop(x,y,theta,num_iter)
   return
 
 def main():
