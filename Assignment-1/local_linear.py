@@ -13,19 +13,13 @@ def read_params():
   return (x,y)
 
 def normalize(mat):
-  mean = np.mean(mat,axis=0)
-  var = np.var(mat,axis=0)
-  for i in range (len(mat)):
-    for j in range (mat.shape[1]):
-      mat[i,j] = Decimal(mat[i,j]) - Decimal(mean[0,j])
-      mat[i,j] = Decimal(mat[i,j])/Decimal(var[0,j])
   z = np.zeros((mat.shape[0],1),dtype=float)
   z+=1
   z = np.hstack((z,mat))
   return z
 
 def exp_function(x1,x):
-  tow = 0.8
+  tow = 0.4
   diff = x1-x
   diff_sqr = np.multiply(diff,diff)
   z = np.sum(diff_sqr,axis=1)[0,0]
@@ -45,7 +39,7 @@ def gradient(x,y,theta,point_x,point_y):
 def local_weighted(point_x,point_y,x,y):
   theta = np.asmatrix(np.zeros((x.shape[1],1),dtype=float,order='F'))
   num_iter = 300
-  alpha = 0.03
+  alpha = 0.003
   alpha/=len(x)
   for counter in range(num_iter):
     grad = gradient(x,y,theta,point_x,point_y)
@@ -53,17 +47,16 @@ def local_weighted(point_x,point_y,x,y):
   return np.dot(point_x,theta)[0,0]
 
 def algo(x,y):
-  output_values = np.asmatrix(np.zeros((x.shape[0]/100,1),dtype=float,order='F'))
-  for i in range(len(x)/100):
+  output_values = np.asmatrix(np.zeros((x.shape[0],1),dtype=float,order='F'))
+  for i in range(len(x)):
     output_values[i,0] = local_weighted(x[i,:],y[i,0],x,y)
   return output_values
 
 def main():
   (x,y) = read_params()
   value_mat = algo(x,y)
+  value_mat = np.hstack((value_mat,y))
   print(value_mat)
-  print("*******************")
-  print(y)
 
 if __name__ == "__main__":
 	main()
