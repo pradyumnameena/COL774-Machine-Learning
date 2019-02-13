@@ -16,12 +16,10 @@ def read_params():
 def normalize(mat):
   mean = np.mean(mat,axis=0)
   var = np.var(mat,axis=0)
+  mat-=mean
   for i in range (len(mat)):
-  	for j in range (mat.shape[1]):
-  		mat[i,j] = Decimal(mat[i,j]) - Decimal(mean[0,j])
-  		mat[i,j] = Decimal(mat[i,j])/Decimal(var[0,j])
-  z = np.zeros((mat.shape[0],1),dtype=float)
-  z+=1
+    mat[i,:] = np.divide(mat[i,:],var)
+  z = 1 + np.zeros((mat.shape[0],1),dtype=float)
   z = np.hstack((z,mat))
   return z
 
@@ -34,60 +32,39 @@ def modify(y):
       z[i,0] = 0
   return z
 
-def compute_mean(x,y,num_classes):
-  count = np.asmatrix(np.zeros((num_classes,1),dtype=int,order='F'))
-  summation = np.asmatrix(np.zeros((num_classes,x.shape[1]),dtype=float,order='F'))
-  for i in range(len(x)):
-    count[y[i],0]+=1
-    for j in range(x.shape[1]):
-      summation[y[i],j]+=x[i,j]
-  for i in range(num_classes):
-    for j in range(x.shape[1]):
-      summation[i,j]/=count[i,0]
-  return summation
+def compute_covariance_matrix(class_data,mean_mat,var_mat):
+  z = np.dot((class_data-mean_mat).transpose(),(class_data-mean_mat))
+  return z/len(class_data)
 
-def compute_var(x,y,num_classes,mean_matrix):
-  rv = np.asmatrix(np.zeros((mean_matrix.shape[0],mean_matrix.shape[1]),dtype=float,order='F'))
-  count = np.asmatrix(np.zeros((num_classes,1),dtype=int,order='F'))
-  for i in range(len(x)):
-    count[y[i]]+=1
-    for j in range(x.shape[1]):
-      rv[y[i],j]+=(x[i,j]-mean_matrix[y[i],j])*(x[i,j]-mean_matrix[y[i],j])
-  
-  for i in range(num_classes):
-    for j in range(x.shape[1]):
-      rv[i,j]/=count[y[i],0]
-  return rv
-
-def compute_covariance_matrix(x,y,mean_mat,var_mat,class_id):
-  z = np.asmatrix(np.zeros((x.shape[1],x.shape[1]),dtype=float,order='F'))
-  for i in range(1,x.shape[1]):
-    z[i,i] = var_mat[0,i]
-  return z
+def curve_plot(class_0,class_1):
+  plt.scatter(np.array(class_1)[:,1],np.array(class_1)[:,2],c='g',label='Alaska (y==1)')
+  plt.scatter(np.array(class_0)[:,1],np.array(class_0)[:,2],c='r',label='Canada (y==0)')
+  plt.legend()
+  plt.xlabel('Growth ring diameters in fresh water')
+  plt.ylabel('Growth ring diameters in marine water')
+  plt.title('Gaussian Discriminant Analysis')
+  plt.savefig('gda.png',dpi=200)
 
 def main():
   (x,y) = read_params()
-  num_classes = 2
-  mean_matrix = compute_mean(x,y,num_classes)
-  variance_matrix = compute_var(x,y,num_classes,mean_matrix)
-  mean_0 = mean_matrix[0,:]
-  mean_1 = mean_matrix[1,:]
-  var_0 = variance_matrix[0,:]
-  var_1 = variance_matrix[1,:]
-  covariance_matrix_0 = compute_covariance_matrix(x,y,mean_0,var_0,0)
-  covariance_matrix_1 = compute_covariance_matrix(x,y,mean_1,var_1,1)
+  class_0 = []
+  class_1 = []
+  for i in range(len(x)):
+    if y[i]==0:
+      class_0.append([x[i,0],x[i,1],x[i,2]])
+    else:
+      class_1.append([x[i,0],x[i,1],x[i,2]])
+
+  mean_0 = np.mean(class_0,axis=0)
+  mean_1 = np.mean(class_1,axis=0)
+  var_0 = np.var(class_0,axis=0)
+  var_1 = np.var(class_1,axis=0)
+  covariance_matrix_0 = compute_covariance_matrix(class_0,mean_0,var_0)
+  covariance_matrix_1 = compute_covariance_matrix(class_1,mean_1,var_1)
+  covariance_matrix = compute_covariance_matrix(x,np.mean(x,axis=0),np.var(x,axis=0))
   print(covariance_matrix_0)
   print(covariance_matrix_1)
-  class_1 = []
-  class_2 = []
-  for i in range(len(x)):
-    if y[i]==1:
-      class_1.append([x[i,1],x[i,2]])
-    else:
-      class_2.append([x[i,1],x[i,2]])
-  plt.scatter(np.array(class_1)[:,0],np.array(class_1)[:,1],c='g',label='Alaska (y==1)')
-  plt.scatter(np.array(class_2)[:,0],np.array(class_2)[:,1],c='r',label='Canada (y==0)')
-  plt.legend()
-  plt.show()
+  # curve_plot(class_0,class_1)
+  
 if __name__ == "__main__":
 	main()
