@@ -1,22 +1,27 @@
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import linalg
 from decimal import Decimal
 
-def read_params():
-  x_data = pd.read_csv("linearX.csv",header=None)
-  y_data = pd.read_csv("linearY.csv",header=None)
+def read_params(x_path,y_path):
+  x_data = pd.read_csv(x_data,header=None)
+  y_data = pd.read_csv(y_path,header=None)
   x = normalize(np.asmatrix(np.array(x_data)))
   y = np.asmatrix(np.array(y_data))
   return (x,y,np.array(x_data),np.array(y_data))
 
 def normalize(mat):
+
+  # x = (x-mean)/variance
   mean = np.mean(mat,axis=0)
   var = np.var(mat,axis=0)
   mat-=mean
   for i in range (len(mat)):
   	mat[i,:] = np.divide(mat[i,:],var)
+
+  # including the initial column of x0 feature
   z = 1 + np.zeros((mat.shape[0],1),dtype=float)
   z = np.hstack((z,mat))
   return z
@@ -48,6 +53,8 @@ def algo(x,y,theta,alpha):
   epsilon = 0.000000001
   old_cost = 1000
   new_cost = 0
+  
+  # convergence criteria: Change in cost<epsilon
   while True:
     grad = gradient(x,y,theta)
     theta-=alpha*grad
@@ -56,6 +63,7 @@ def algo(x,y,theta,alpha):
       break
     old_cost = new_cost
     num_iter+=1
+  # On console the number of iterations taken and the cost
   print("Number of iterations = " + str(num_iter))
   print("Final cost = " + str(new_cost))
 
@@ -73,10 +81,21 @@ def curve_plot(x,theta,x_data,y_data):
   plt.savefig('linear_reg.png',dpi=200)
 
 def main():
-  (x,y,x_data,y_data) = read_params()
+  
+  # Taking parameters from command line
+  x_path = sys.argv[1]
+  y_path = sys.argv[2]
+  alpha = float(sys.argv[3])
+  time_gap = float(sys.argv[4])
+  
+  # Reading the dataset
+  (x,y,x_data,y_data) = read_params(x_path,y_path)
+  
+  # Computing the theta vector
   theta = np.asmatrix(np.zeros((x.shape[1],1),dtype=float,order='F'))
-  alpha = 0.03
   algo(x,y,theta,alpha)
+  
+  # Plotting
   curve_plot(x,theta,x_data,y_data)
   # contour_plot(x,y)
 
