@@ -10,7 +10,9 @@ def read_params():
   x = np.asmatrix(np.array(x_data))
   y = np.asmatrix(np.array(y_data))
   x = normalize(x)
-  return (x,y)
+  x1 = np.array(x_data)
+  y1 = np.array(y_data)
+  return (x,y,x1,y1)
 
 def normalize(mat):
   mean = np.mean(mat,axis=0)
@@ -41,29 +43,36 @@ def gradient(x,y,theta):
   grad = np.sum(grad2,axis=0).transpose()
   return grad
 
-def shouldstop(x,y,theta,num_iter):
-  ans = True
-  if(num_iter>0):
-    ans = False
-  return ans
-
 def algo(x,y,theta,alpha):
-  num_iter = 1000
+  num_iter = 0
   alpha/=len(x)
-  stopping_cond = False
-  while stopping_cond==False:
+  epsilon = 0.000001
+  old_cost = 1000
+  new_cost = 0
+  while True:
     grad = gradient(x,y,theta)
     theta-=alpha*grad
-    num_iter-=1
-    stopping_cond = shouldstop(x,y,theta,num_iter)
+    new_cost = compute_cost(x,y,theta)
+    if(old_cost-new_cost<epsilon):
+      break
+    old_cost = new_cost
+    num_iter+=1
+  print("Number of iterations = " + str(num_iter))
+  print("Final cost = " + str(new_cost))
   return
 
 def main():
-  (x,y) = read_params()
+  (x,y,x_data,y_data) = read_params()
   theta = np.asmatrix(np.zeros((x.shape[1],1),dtype=float,order='F'))
-  print(theta.shape)
   alpha = 0.03
   algo(x,y,theta,alpha)
+  print(theta)
+  y_out = np.array(np.dot(x,theta))
+  # print(x_data[81:100,:])
+  # print("Cost on test-set= " + str(compute_cost(x[81:100,:],y[81:100,:],theta)))
+  plt.plot(x_data,y_data,'ro')
+  plt.plot(x_data,y_out)
+  plt.show()
 
 if __name__ == "__main__":
 	main()

@@ -10,7 +10,7 @@ def read_params():
   x = np.asmatrix(np.array(x_data))
   y = np.asmatrix(np.array(y_data))
   x = normalize(x)
-  return (x,y)
+  return (x,y,np.array(x_data),np.array(y_data))
 
 def normalize(mat):
   mean = np.mean(mat,axis=0)
@@ -43,17 +43,32 @@ def algo(x,y,theta):
     for j in range(x.shape[1]):
       for k in range(len(x)):
         second_der[i,j]+=x[k,i]*x[k,j]*prod3[k,0]
-  second_der = np.linalg.inv(-1*second_der)
+  second_der = np.linalg.pinv(-1*second_der)
   
   theta-=np.dot(second_der,first_der)
   return
 
 def main():
-  (x,y) = read_params()
+  (x,y,x_data,y_data) = read_params()
   theta = np.asmatrix(np.zeros((x.shape[1],1),dtype=float,order='F'))
   algo(x,y,theta)
+  print(theta)
   val = np.dot(x,theta)
   val = 1/(1+np.exp(-1*val))
+  class_1 = []
+  class_2 = []
+  for i in range(len(x)):
+    if y[i]==1:
+      class_1.append([x[i,1],x[i,2]])
+    else:
+      class_2.append([x[i,1],x[i,2]])
+  plt.scatter(np.array(class_1)[:,0],np.array(class_1)[:,1],c='g',label='positive class (y==1)')
+  plt.scatter(np.array(class_2)[:,0],np.array(class_2)[:,1],c='r',label='negative class (y==0)')
+  x_1 = np.arange(-2,3,0.1)
+  y_1 = -(theta[0,0] + theta[1,0]*x_1)/theta[2,0]
+  plt.plot(x_1,y_1)
+  plt.legend()
+  plt.show()
   val = np.hstack((val,y))
   print(val)
 

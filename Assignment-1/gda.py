@@ -61,8 +61,8 @@ def compute_var(x,y,num_classes,mean_matrix):
 
 def compute_covariance_matrix(x,y,mean_mat,var_mat,class_id):
   z = np.asmatrix(np.zeros((x.shape[1],x.shape[1]),dtype=float,order='F'))
-  for i in range(x.shape[1]):
-    z[i,i] = mean_mat[class_id,i]*mean_mat[class_id,i] + var_mat[class_id,i]
+  for i in range(1,x.shape[1]):
+    z[i,i] = var_mat[0,i]
   return z
 
 def main():
@@ -76,6 +76,18 @@ def main():
   var_1 = variance_matrix[1,:]
   covariance_matrix_0 = compute_covariance_matrix(x,y,mean_0,var_0,0)
   covariance_matrix_1 = compute_covariance_matrix(x,y,mean_1,var_1,1)
-
+  print(covariance_matrix_0)
+  print(covariance_matrix_1)
+  class_1 = []
+  class_2 = []
+  for i in range(len(x)):
+    if y[i]==1:
+      class_1.append([x[i,1],x[i,2]])
+    else:
+      class_2.append([x[i,1],x[i,2]])
+  plt.scatter(np.array(class_1)[:,0],np.array(class_1)[:,1],c='g',label='Alaska (y==1)')
+  plt.scatter(np.array(class_2)[:,0],np.array(class_2)[:,1],c='r',label='Canada (y==0)')
+  plt.legend()
+  plt.show()
 if __name__ == "__main__":
 	main()
