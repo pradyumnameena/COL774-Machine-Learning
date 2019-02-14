@@ -75,7 +75,8 @@ def curve_plot(x_data,y_data,value_mat):
   plt.ylabel('y')
   plt.title("local_lin_reg")
   plt.legend()
-  plt.savefig('local_linear.png',dpi=200)
+  # plt.savefig('local_linear.png',dpi=200)
+  plt.show()
 
 def main():
 
@@ -88,13 +89,13 @@ def main():
   (x,y,x_data,y_data) = read_params(x_path,y_path)
 
   print("Since no dataset was supplied for testing I am testing on the given dataset only.")
-  print("If you want to see the result uncomment line 94 and line 97")
+  print("If you want to avoid the result comment line 94 and line 97")
 
   # output values on the given dataset when predicted using locally weighted linear regression
-  # value_mat = algo(x,y,tow)
+  value_mat = algo(x,y,tow)
   
   # plotting
-  # curve_plot(x_data,y_data,value_mat)
+  curve_plot(x_data,y_data,value_mat)
 
 if __name__ == "__main__":
 	main()

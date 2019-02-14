@@ -74,7 +74,8 @@ def curve_plot(x,y,theta):
   plt.ylabel('x2')
   plt.legend()
   plt.title('Logistic Regression')
-  plt.savefig('logistic_reg.png',dpi=200)
+  # plt.savefig('logistic_reg.png',dpi=200)
+  plt.show()
 
 def main():
   # Taking parameters from command line

@@ -58,7 +58,8 @@ def plot_linear(class_0,class_1,mu_0,mu_1,sigma):
   plt.plot(x1,x2,label='Linear Hypothesis')
   
   plt.legend()
-  plt.savefig('gda_linear.png',dpi=200)
+  # plt.savefig('gda_linear.png',dpi=200)
+  plt.show()
 
 def plot_quadratic(class_0,class_1,mu_0,mu_1,sigma_0,sigma_1):
   # Plotting the initially given data
@@ -101,7 +102,8 @@ def plot_quadratic(class_0,class_1,mu_0,mu_1,sigma_0,sigma_1):
   plt.plot(np.array(class_fin)[:,0],np.array(class_fin)[:,1])
 
   plt.legend()
-  plt.savefig('gda_quadratic.png',dpi=200)
+  # plt.savefig('gda_quadratic.png',dpi=200)
+  plt.show()
 
 def main():
   # Taking parameters from command line

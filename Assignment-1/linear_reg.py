@@ -1,12 +1,14 @@
 import sys
 import numpy as np
 import pandas as pd
+from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from scipy import linalg
 from decimal import Decimal
 
 def read_params(x_path,y_path):
-  x_data = pd.read_csv(x_data,header=None)
+  x_data = pd.read_csv(x_path,header=None)
   y_data = pd.read_csv(y_path,header=None)
   x = normalize(np.asmatrix(np.array(x_data)))
   y = np.asmatrix(np.array(y_data))
@@ -35,24 +37,14 @@ def gradient(x,y,theta):
   grad = np.dot(np.dot(x.transpose(),x),theta) - np.dot(x.transpose(),y)
   return grad/len(x)
 
-def contour_plot(x_data,y_data):
-  num_points_x1 = 100
-  num_points_x2 = 100
-  x1 = np.linspace(-5,5,num_points_x1)
-  x2 = np.linspace(-5,5,num_points_x2)
-  X1,X2 = np.meshgrid(x1,x2)
-  Y = np.asmatrix(np.zeros((100,100),dtype=float))
-  for i in range(num_points_x1):
-    for j in range(num_points_x2):
-      Y[i,j] = compute_cost(x_data,y_data,[[x1[i]],[x2[j]]])
-  cp = plt.contour(X1,X2,np.array(Y))
-  # plt.show()
-
 def algo(x,y,theta,alpha):
   num_iter = 0
   epsilon = 0.000000001
   old_cost = 1000
   new_cost = 0
+  
+  # contains the cost after each iteration
+  cost_matrix = [[0,0,0]]
   
   # convergence criteria: Change in cost<epsilon
   while True:
@@ -62,23 +54,73 @@ def algo(x,y,theta,alpha):
     if(old_cost-new_cost<epsilon):
       break
     old_cost = new_cost
+    cost_matrix = np.append(cost_matrix,[[new_cost,theta[0,0],theta[1,0]]],axis=0)
     num_iter+=1
   # On console the number of iterations taken and the cost
   print("Number of iterations = " + str(num_iter))
   print("Final cost = " + str(new_cost))
 
+  # returning the cost martix along with the theta vector
+  return np.asmatrix(cost_matrix)[1:,:]
+
 def curve_plot(x,theta,x_data,y_data):
+  plt.figure()
   y_out = np.array(np.dot(x,theta))
-  plt.figure(0)
   plt.title('Linear regression')
   plt.scatter(x_data,y_data,c='r',label='Given Data')
   plt.xlabel(' x ')
   plt.ylabel(' y ')
-  plt.figure(0)
   new_x,new_y = zip(*sorted(zip(x_data,y_out)))
   plt.plot(new_x,new_y,'-',linewidth=2,c='g',label='Hypothesis')
   plt.legend()
-  plt.savefig('linear_reg.png',dpi=200)
+  # plt.savefig('linear_reg.png',dpi=200)
+  plt.show()
+
+def contour_plot(x_data,y_data,cost_data,time_gap):
+  plt.figure()
+  num_points_x1 = 100
+  num_points_x2 = 100
+  x1 = np.linspace(-1,1,num_points_x1)
+  x2 = np.linspace(-1,1,num_points_x2)
+  X1,X2 = np.meshgrid(x1,x2)
+  Y = np.asmatrix(np.zeros((num_points_x1,num_points_x2),dtype=float))
+  for i in range(num_points_x1):
+    for j in range(num_points_x2):
+      Y[i,j] = compute_cost(x_data,y_data,[[X1[i][j]],[X2[i][j]]])
+  cp = plt.contour(X1,X2,np.array(Y))
+  
+  plt.xlabel('theta_0')
+  plt.ylabel('theta_1')
+  plt.ion()
+  for i in range(len(cost_data)):
+    plt.scatter(cost_data[i,1],cost_data[i,2],color='r') 
+    plt.pause(time_gap)
+  plt.ioff() 
+  plt.show()
+
+def mesh_plot(x_data,y_data,cost_data,time_gap):
+  fig = plt.figure()
+  ax = fig.gca(projection='3d')
+  num_points_x1 = 100
+  num_points_x2 = 100
+  x1 = np.linspace(-1,2,num_points_x1)
+  x2 = np.linspace(-1,2,num_points_x2)
+  X1,X2 = np.meshgrid(x1,x2)
+  Y = np.asmatrix(np.zeros((num_points_x1,num_points_x2),dtype=float))
+  for i in range(num_points_x1):
+    for j in range(num_points_x2):
+      Y[i,j] = compute_cost(x_data,y_data,[[X1[i][j]],[X2[i][j]]])
+  cp = ax.plot_surface(X1,X2,np.array(Y),cmap=cm.coolwarm,
+                       linewidth=0, antialiased=False)
+  
+  plt.xlabel('theta_0')
+  plt.ylabel('theta_1')
+  plt.ion()
+  for i in range(len(cost_data)):
+    ax.scatter(cost_data[i,1],cost_data[i,2],cost_data[i,0],color='r') 
+    plt.pause(time_gap)
+  plt.ioff() 
+  plt.show()
 
 def main():
   
@@ -91,13 +133,14 @@ def main():
   # Reading the dataset
   (x,y,x_data,y_data) = read_params(x_path,y_path)
   
-  # Computing the theta vector
+  # Computing the theta vector and the cost vector
   theta = np.asmatrix(np.zeros((x.shape[1],1),dtype=float,order='F'))
-  algo(x,y,theta,alpha)
+  cost_matrix = algo(x,y,theta,alpha)
   
   # Plotting
   curve_plot(x,theta,x_data,y_data)
-  # contour_plot(x,y)
-
+  contour_plot(x,y,cost_matrix,time_gap)
+  mesh_plot(x,y,cost_matrix,time_gap)
+  
 if __name__ == "__main__":
 	main()
