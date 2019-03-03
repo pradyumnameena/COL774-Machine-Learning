@@ -4,7 +4,8 @@ import csv
 from nltk.stem.porter import PorterStemmer
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import f1_score
 
 # from utils.py which was supplied in the package provided
 def _stem(doc, p_stemmer, en_stop, return_tokens):
@@ -38,16 +39,16 @@ def getStemmedDocuments(docs, return_tokens=True):
     else:
         return _stem(docs, p_stemmer, en_stop, return_tokens)
 
+# reading the parameters
 def read_params():
-	text_matrix = pd.read_csv('ass2_data/train.csv',usecols=['text'])
-	class_matrix = pd.read_csv('ass2_data/train.csv',usecols=['stars'])
+	# text is read in a matrix so that it is easy to pass it into countvectorizer
+	text_matrix = pd.read_csv('ass2_data/train.csv',usecols=['text'],encoding="utf-8")
+	class_matrix = pd.read_csv('ass2_data/train.csv',usecols=['stars'],dtype=int)
 	return (text_matrix,class_matrix)
 
-def pre_processing(text_matrix,class_matrix):
-	# for preprocessing the text present in the data
-	# for stemming
-
-	# for means of various classes
+# calculates the occurences of each class
+def pre_processing(class_matrix):
+	# for probability of various classes
 	num1 = 0
 	num2 = 0
 	num3 = 0
@@ -68,39 +69,94 @@ def pre_processing(text_matrix,class_matrix):
 	count_arr = np.array([num1,num2,num3,num4,num5])
 	# count_arr/=class_matrix.shape[0]
 	# using the above instruction leads to the probabilities being exact 0
-	return (text_matrix,count_arr)
+	return (count_arr)
 
-def get_word_counts(text_matrix):
-	# either use the countvector class or implement your own
-	# assumes that stemming has already been done
-	key_words = 10000
-	vectorizer = CountVectorizer()
-	X = vectorizer.fit_transform(text_matrix.to_numpy())
-	print(text_matrix)
-	print(X)
-	word_count = X.toarray()
-	# word_count = np.asmatrix(np.zeros((key_words,5),dtype=int,order='F'))
-	return word_count
+# get word counts for the tokens obtained after stemming
+def get_word_counts(text_matrix,class_matrix):
+	word_count = np.asmatrix(np.zeros((5,1),dtype=int,order='F'))
+	word_counter = 0
+	word_index_mapping = {}
+	num_points = text_matrix.shape[0]/100
+	for i in range(num_points):
+		stemmed_string = getStemmedDocuments(text_matrix.iat[i,0])
+		class_idx = class_matrix.iat[i,0]-1
+		for word in stemmed_string:
+			if word_index_mapping.has_key(word)==False:
+				# first occurence of word hence update the dictionary as well
+				word_count = np.hstack((word_count,np.zeros((5,1),dtype=int,order='F')))
+				word_index_mapping.update({word:word_counter})
+				word_count[class_idx,word_counter]+=1
+				word_counter+=1
+			else:
+				# word has already been seen hence update the matrix
+				word_count[class_idx,word_index_mapping.get(word)]+=1
+	return (word_count,word_index_mapping)
 
+# reading the test parameters
+def read_test_params():
+	test_text = pd.read_csv('ass2_data/test.csv',usecols=['text'],encoding="utf-8")
+	test_class = pd.read_csv('ass2_data/test.csv',usecols=['stars'])
+	return (test_text,test_class)
+
+# for computing the confusion matrix
+def testing_time(word_count,index_mapping,count_arr,test_text,test_class):
+	# getting the total number of words in each class
+	total_words_class = np.sum(word_count,axis=1)
+	# num_points = test_class.shape[0]
+	num_points = 15000
+	prediction = np.array(1+np.zeros((num_points,1),dtype=int))
+	default_prob = [1.0,1.0,1.0,1.0,1.0]
+
+	for i in range(num_points):
+		prob_arr = [1.0,1.0,1.0,1.0,1.0]
+		stemmed_string = getStemmedDocuments(test_text.iat[i,0],True)
+		# computing for each token separately
+		for word in stemmed_string:
+			# computing for each class
+			for j in range(4):
+				if index_mapping.has_key(word) and word_count[j,index_mapping.get(word)]!=0:
+					prob_arr[j]*=0.5
+					# use the computed values
+				else:
+					# use default probabilities
+					prob_arr[j]*=default_prob[j]
+		# assigning the label with maximum probabilities
+		prediction[i] = 1+np.argmax(prob_arr)
+	return prediction
+
+# main function
 def main():
-	
-	# reading the dataset from the already converted csv file
+	print("Only 1/100 of dataset is being used on 15000 of datapoints")
+	# reading the dataset from the already converted csv file into pandas dataframe
 	(text_matrix,class_matrix) = read_params()
+	print("successfully read training data")
 
-	# preprocessing the text data i.e. stemming and all
-	# also return the class occurences
-	(text_matrix,count_arr) = pre_processing(text_matrix,class_matrix)
+	# preprocessing the text data returns the class occurences
+	count_arr = pre_processing(class_matrix)
+	print("computed class counts")
 	
 	# returns the word count distribution across classes
-	word_count = get_word_counts(text_matrix)
+	(word_count,index_mapping) = get_word_counts(text_matrix,class_matrix)
+	print("computed distribution of tokens across classes")
+	
+	# loading the test data
+	(test_text,test_class) = read_test_params()
+	print("successfully read test data")
 
-	# getting the number of words in each class
-	total_words_class = np.sum(word_count,axis=1)
-	print(total_words_class)
-	# prints the count of each class
-	# print(count_arr)
+	# calculating on test data
+	prediction = testing_time(word_count,index_mapping,count_arr,test_text,test_class)
+	print("prediction done")
 
+	true_label_array = np.array(test_class)[0:15000,:]
+	# calculating the confusion matrix
+	confatrix = confusion_matrix(true_label_array,prediction)
+	print("confusion matrix computed")
+	print(confatrix)
 
+	# calculating f1 score across various classes
+	f1_matrix = f1_score(true_label_array,prediction,average=None)
+	print("f1_score for separate class calculated separately")
+	print(f1_matrix)
 	return
 
 if __name__ == "__main__":
