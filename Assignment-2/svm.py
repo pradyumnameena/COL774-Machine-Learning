@@ -1,4 +1,5 @@
 import csv
+import math
 import pandas as pd
 import numpy as np
 import cvxopt
@@ -58,10 +59,40 @@ def linear_kernel(train_data,train_output):
 	solution = cvxopt.solvers.qp(P,q,G,h,A,b)
 	return solution
 
+# gaussian function calculator
+def gaussain_func(a,b,gamma):
+	diff = a-b
+	rv = math.exp(-1*gamma*float(np.sum(diff*diff)))
+	return rv
+
+# gaussian kernel
+def gaussian_kernel(train_data,train_output,gamma):
+	# for cvxopt use
+	m = len(train_data)
+	n = train_data.shape[1]
+	X_Y = np.asmatrix(np.zeros((m,n),dtype=float))
+	for i in range(m):
+		for j in range(n):
+			X_Y[i,j] = gaussain_func(train_data[i,:],train_data[j,:],gamma)*train_output[i]*train_output[j]
+	
+	P = cvxopt.matrix(np.dot(X_Y,X_Y.transpose()))
+	q = cvxopt.matrix(-2*np.ones((m,1)))
+	A = cvxopt.matrix(train_output.transpose())
+	b = cvxopt.matrix(0.0)
+
+	tmp1 = -1*np.identity(m)
+	tmp2 = np.identity(m)
+	G = cvxopt.matrix(np.vstack((tmp1,tmp2)))
+	tmp1 = np.zeros(m)
+	tmp2 = np.ones(m)
+	h = cvxopt.matrix(np.hstack((tmp1,tmp2)))
+	solution = cvxopt.solvers.qp(P,q,G,h,A,b)
+	return solution
+
 # calculating the weight matrix
-def calculate_svm_params(linear_kernel_soln,train_data,train_output,tolerance):
+def calculate_svm_params(kernel_soln,train_data,train_output,tolerance):
 	(m,n) = (train_data.shape[0],train_data.shape[1])
-	raveled = np.ravel(linear_kernel_soln['x'])
+	raveled = np.ravel(kernel_soln['x'])
 	langrangian_params = np.arange(len(raveled)) [raveled>tolerance]
 	weight_matrix = np.asmatrix(np.zeros((1,n),dtype=float))
 	
@@ -84,30 +115,6 @@ def svm_prediction(weight_matrix,b,test_data):
 		else:
 			predicted[i] = -1
 	return predicted
-
-# gaussian kernel
-def gaussian_kernel(train_data,train_output):
-	# for cvxopt use
-	m = len(train_data)
-	n = train_data.shape[1]
-	X_Y = np.asmatrix(np.zeros((m,n),dtype=float))
-	for i in range(m):
-		for j in range(n):
-			X_Y[i,j] = train_output[i]*train_data[i,j]
-	
-	P = cvxopt.matrix(np.dot(X_Y,X_Y.transpose()))
-	q = cvxopt.matrix(-2*np.ones((m,1)))
-	A = cvxopt.matrix(train_output.transpose())
-	b = cvxopt.matrix(0.0)
-
-	tmp1 = -1*np.identity(m)
-	tmp2 = np.identity(m)
-	G = cvxopt.matrix(np.vstack((tmp1,tmp2)))
-	tmp1 = np.zeros(m)
-	tmp2 = np.ones(m)
-	h = cvxopt.matrix(np.hstack((tmp1,tmp2)))
-	solution = cvxopt.solvers.qp(P,q,G,h,A,b)
-	return solution
 
 # main function
 def main():
@@ -132,8 +139,25 @@ def main():
 	confatrix = confusion_matrix(test_output,predicted)
 	print("confusion matrix computed")
 	
-	print("below is confusion matrix for given tolerance value")
-	print(tolerance)
+	print("below is confusion matrix for linear kernel")
+	print(confatrix)
+
+	# below is for gaussian kernel
+	gamma = 0.05
+	gaussian_kernel_soln = gaussian_kernel(train_data,train_output,gamma)
+	print("gaussian kernel solution found")
+	
+	tolerance = 1e-8
+	(weight_matrix,b) = calculate_svm_params(gaussian_kernel_soln,train_data,train_output,tolerance)
+	print("svm parameters computed")
+
+	predicted = svm_prediction(weight_matrix,b,test_data)
+	print("prediction complete")
+
+	confatrix = confusion_matrix(test_output,predicted)
+	print("confusion matrix computed")
+	
+	print("below is confusion matrix for gaussian kernel")
 	print(confatrix)
 	return
 
