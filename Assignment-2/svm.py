@@ -1,25 +1,96 @@
 import csv
 import pandas as pd
 import numpy as np
+import cvxopt
+import cvxopt.solvers
 
-def get_train_params():
+# getting the training data
+def get_train_params(issubset):
 	train_data = pd.read_csv('ass2_data_svm/train.csv',header=None,dtype=float)
-	train_data = train_data.loc[(train_data[784] == 5) | (train_data[784] == 6)].values
+	if issubset==True:
+		train_data = train_data.loc[(train_data[784] == 5) | (train_data[784] == 6)].values
 	train_output = train_data[:,784:785]
-	train_data = train_data[:,0:785]
+	train_data = train_data[:,0:784]/256
+	for i in range(len(train_output)):
+		if train_output[i,0] == 5:
+			train_output[i,0] = 1
+		else:
+			train_output[i,0] = -1
 	return (train_data,train_output)
 
-def get_test_params():
-	test_data = pd.read_csv('ass2_data_svm/test.csv',header=None,dtype=float).values
-	test_data = test_data.loc[(test_data[784] == 5) | (test_data[784] == 6)].values
+# get the testing data
+def get_test_params(issubset):
+	test_data = pd.read_csv('ass2_data_svm/test.csv',header=None,dtype=float)
+	if issubset==True:
+		test_data = test_data.loc[(test_data[784] == 5) | (test_data[784] == 6)].values
 	test_output = test_data[:,784:785]
-	test_data = test_data[:,0:785]
+	test_data = test_data[:,0:784]/256
+	for i in range(len(test_output)):
+		if test_output[i,0] == 5:
+			test_output[i,0] = 1
+		else:
+			test_output[i,0] = -1
 	return (test_data,test_output)
 
-def main():
-	(train_data,train_output) = get_train_params()
-	(test_data,test_output) = get_test_params()
+def linear_kernel(train_data,train_output):
+	# for cvxopt use
+	m = len(train_data)
+	n = train_data.shape[1]
+	X_Y = np.asmatrix(np.zeros((m,n),dtype=float))
+	for i in range(m):
+		for j in range(n):
+			X_Y[i,j] = train_output[i]*train_data[i,j]
 	
+	P = cvxopt.matrix(np.dot(X_Y,X_Y.transpose()))
+	q = cvxopt.matrix(-2*np.ones((m,1)))
+	A = cvxopt.matrix(train_output.transpose())
+	b = cvxopt.matrix(0.0)
+
+	tmp1 = -1*np.identity(m)
+	tmp2 = np.identity(m)
+	G = cvxopt.matrix(np.vstack((tmp1,tmp2)))
+	tmp1 = np.zeros(m)
+	tmp2 = np.ones(m)
+	h = cvxopt.matrix(np.hstack((tmp1,tmp2)))
+	solution = cvxopt.solvers.qp(P,q,G,h,A,b)
+	return solution
+
+def gaussian_kernel(train_data,train_output):
+	# for cvxopt use
+	m = len(train_data)
+	n = train_data.shape[1]
+	X_Y = np.asmatrix(np.zeros((m,n),dtype=float))
+	for i in range(m):
+		for j in range(n):
+			X_Y[i,j] = train_output[i]*train_data[i,j]
+	
+	P = cvxopt.matrix(np.dot(X_Y,X_Y.transpose()))
+	q = cvxopt.matrix(-2*np.ones((m,1)))
+	A = cvxopt.matrix(train_output.transpose())
+	b = cvxopt.matrix(0.0)
+
+	tmp1 = -1*np.identity(m)
+	tmp2 = np.identity(m)
+	G = cvxopt.matrix(np.vstack((tmp1,tmp2)))
+	tmp1 = np.zeros(m)
+	tmp2 = np.ones(m)
+	h = cvxopt.matrix(np.hstack((tmp1,tmp2)))
+	solution = cvxopt.solvers.qp(P,q,G,h,A,b)
+	return solution
+
+# main function
+def main():
+	print("treating 5 as class 1 and 6 as class -1")
+
+	(train_data,train_output) = get_train_params(True)
+	print("normalized training data retrieved")
+
+	(test_data,test_output) = get_test_params(True)
+	print("normalized test data retrieved")
+
+	linear_kernel_soln = linear_kernel(train_data,train_output)
+	print("linear kernel solution found")
+
 	return
 
 if __name__ == "__main__":
