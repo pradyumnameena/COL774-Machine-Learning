@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import cvxopt
 import cvxopt.solvers
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import f1_score
 
 # getting the training data
 def get_train_params(issubset):
@@ -32,6 +34,7 @@ def get_test_params(issubset):
 			test_output[i,0] = -1
 	return (test_data,test_output)
 
+# linear kernel
 def linear_kernel(train_data,train_output):
 	# for cvxopt use
 	m = len(train_data)
@@ -55,6 +58,34 @@ def linear_kernel(train_data,train_output):
 	solution = cvxopt.solvers.qp(P,q,G,h,A,b)
 	return solution
 
+# calculating the weight matrix
+def calculate_svm_params(linear_kernel_soln,train_data,train_output,tolerance):
+	(m,n) = (train_data.shape[0],train_data.shape[1])
+	raveled = np.ravel(linear_kernel_soln['x'])
+	langrangian_params = np.arange(len(raveled)) [raveled>tolerance]
+	weight_matrix = np.asmatrix(np.zeros((1,n),dtype=float))
+	
+	for i in langrangian_params:
+		for j in range(n):
+			weight_matrix[0,j]+=(raveled[i]*train_data[i,j]*train_output[i,0])
+	
+	idx_used_for_b = langrangian_params[0]
+	b = train_output[idx_used_for_b] - np.dot(train_data[idx_used_for_b,:],weight_matrix.transpose())[0,0]
+	
+	return (weight_matrix,b)
+
+# predicting using parameters supplied on the supplied test_data
+def svm_prediction(weight_matrix,b,test_data):
+	predicted = np.asmatrix(np.zeros((len(test_data),1),dtype=int))
+	for i in range(len(test_data)):
+		val = np.dot(test_data[i,:],weight_matrix.transpose())[0,0] + b
+		if val>0:
+			predicted[i] = 1
+		else:
+			predicted[i] = -1
+	return predicted
+
+# gaussian kernel
 def gaussian_kernel(train_data,train_output):
 	# for cvxopt use
 	m = len(train_data)
@@ -81,7 +112,7 @@ def gaussian_kernel(train_data,train_output):
 # main function
 def main():
 	print("treating 5 as class 1 and 6 as class -1")
-
+	
 	(train_data,train_output) = get_train_params(True)
 	print("normalized training data retrieved")
 
@@ -90,7 +121,20 @@ def main():
 
 	linear_kernel_soln = linear_kernel(train_data,train_output)
 	print("linear kernel solution found")
+	
+	tolerance = 1e-8
+	(weight_matrix,b) = calculate_svm_params(linear_kernel_soln,train_data,train_output,tolerance)
+	print("svm parameters computed")
 
+	predicted = svm_prediction(weight_matrix,b,test_data)
+	print("prediction complete")
+
+	confatrix = confusion_matrix(test_output,predicted)
+	print("confusion matrix computed")
+	
+	print("below is confusion matrix for given tolerance value")
+	print(tolerance)
+	print(confatrix)
 	return
 
 if __name__ == "__main__":
