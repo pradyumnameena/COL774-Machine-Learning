@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-import csv
+import math
+import re
 from nltk.stem.porter import PorterStemmer
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
@@ -46,41 +47,35 @@ def read_params():
 	class_matrix = pd.read_csv('ass2_data/train.csv',usecols=['stars'],dtype=int)
 	return (text_matrix,class_matrix)
 
-# calculates the occurences of each class
-def pre_processing(class_matrix):
-	# for probability of various classes
-	num1 = 0
-	num2 = 0
-	num3 = 0
-	num4 = 0
-	num5 = 0
+# reading the test parameters
+def read_test_params():
+	test_text = pd.read_csv('ass2_data/test.csv',usecols=['text'],encoding="utf-8")
+	test_class = pd.read_csv('ass2_data/test.csv',usecols=['stars'],dtype=int)
+	return (test_text,test_class)
 
-	for i in range(class_matrix.shape[0]):
-		if class_matrix.iat[i,0] == 1.0 :
-			num1+=1
-		elif class_matrix.iat[i,0] == 2.0:
-			num2+=1
-		elif class_matrix.iat[i,0] == 3.0:
-			num3+=1
-		elif class_matrix.iat[i,0] == 4.0:
-			num4+=1
-		else:
-			num5+=1
+# calculates the occurences of each class
+def get_class_count(class_matrix):
+	# for probability of various classes
+	class_matrix= np.asmatrix(class_matrix)
+	num1 = np.sum(np.multiply(class_matrix,(class_matrix==1.0)))
+	num2 = np.sum(np.multiply(class_matrix,(class_matrix==2.0)))/2
+	num3 = np.sum(np.multiply(class_matrix,(class_matrix==3.0)))/3
+	num4 = np.sum(np.multiply(class_matrix,(class_matrix==4.0)))/4
+	num5 = np.sum(np.multiply(class_matrix,(class_matrix==5.0)))/5
 	count_arr = np.array([num1,num2,num3,num4,num5])
-	# count_arr/=class_matrix.shape[0]
-	# using the above instruction leads to the probabilities being exact 0
 	return (count_arr)
 
-# get word counts for the tokens obtained after stemming
-def get_word_counts(text_matrix,class_matrix):
+# get naive split tokenized count
+def get_split_count(text_matrix,class_matrix):
 	word_count = np.asmatrix(np.zeros((5,1),dtype=int,order='F'))
 	word_counter = 0
 	word_index_mapping = {}
-	num_points = text_matrix.shape[0]/100
+	num_points = text_matrix.shape[0]
+	
 	for i in range(num_points):
-		stemmed_string = getStemmedDocuments(text_matrix.iat[i,0])
+		splitted_string = re.sub('[^a-zA-Z0-9\s]','',text_matrix.iat[i,0]).split()
 		class_idx = class_matrix.iat[i,0]-1
-		for word in stemmed_string:
+		for word in splitted_string:
 			if word_index_mapping.has_key(word)==False:
 				# first occurence of word hence update the dictionary as well
 				word_count = np.hstack((word_count,np.zeros((5,1),dtype=int,order='F')))
@@ -90,65 +85,57 @@ def get_word_counts(text_matrix,class_matrix):
 			else:
 				# word has already been seen hence update the matrix
 				word_count[class_idx,word_index_mapping.get(word)]+=1
-	return (word_count,word_index_mapping)
+	return (word_count,word_index_mapping,word_counter)
 
-# reading the test parameters
-def read_test_params():
-	test_text = pd.read_csv('ass2_data/test.csv',usecols=['text'],encoding="utf-8")
-	test_class = pd.read_csv('ass2_data/test.csv',usecols=['stars'])
-	return (test_text,test_class)
-
-# for computing the confusion matrix
-def testing_time(word_count,index_mapping,count_arr,test_text,test_class):
-	# getting the total number of words in each class
-	total_words_class = np.sum(word_count,axis=1)
-	# num_points = test_class.shape[0]
-	num_points = 15000
-	prediction = np.array(1+np.zeros((num_points,1),dtype=int))
-	default_prob = [1.0,1.0,1.0,1.0,1.0]
-
+# for naive split test predictions
+def testing_time_naive_split(word_count,index_mapping,count_arr,test_text,test_class,num_words,num_points):
+	prediction = np.array(np.zeros((num_points,1),dtype=int))
+	total_points = np.sum(count_arr)
+	class_vocab_size = np.sum(word_count,axis=1)
 	for i in range(num_points):
-		prob_arr = [1.0,1.0,1.0,1.0,1.0]
-		stemmed_string = getStemmedDocuments(test_text.iat[i,0],True)
-		# computing for each token separately
-		for word in stemmed_string:
-			# computing for each class
-			for j in range(4):
-				if index_mapping.has_key(word) and word_count[j,index_mapping.get(word)]!=0:
-					prob_arr[j]*=0.5
-					# use the computed values
-				else:
-					# use default probabilities
-					prob_arr[j]*=default_prob[j]
+		prob_arr = [0.0,0.0,0.0,0.0,0.0]
+		splitted_string = re.sub('[^a-zA-Z0-9\s]','',test_text.iat[i,0]).split()
+		for word in splitted_string:
+			if index_mapping.has_key(word):
+				word_idx = index_mapping.get(word)
+				for j in range(5):
+					prob_arr[j] += (math.log10(float(word_count[j,word_idx] + 1)) - math.log10(float(class_vocab_size[j] + num_words)))
+			else:
+				for j in range(5):
+					prob_arr[j] -= math.log10(float(class_vocab_size[j] + num_words))
+					
+		# class probabilities
+		for j in range(5):
+			prob_arr[j] += math.log10(float(count_arr[j])/float(total_points))
 		# assigning the label with maximum probabilities
 		prediction[i] = 1+np.argmax(prob_arr)
 	return prediction
 
 # main function
 def main():
-	print("Only 1/100 of dataset is being used on 15000 of datapoints")
 	# reading the dataset from the already converted csv file into pandas dataframe
 	(text_matrix,class_matrix) = read_params()
 	print("successfully read training data")
 
 	# preprocessing the text data returns the class occurences
-	count_arr = pre_processing(class_matrix)
+	count_arr = get_class_count(np.array(class_matrix))
 	print("computed class counts")
 	
 	# returns the word count distribution across classes
-	(word_count,index_mapping) = get_word_counts(text_matrix,class_matrix)
+	(word_count,index_mapping,word_counter) = get_split_count(text_matrix,class_matrix)
 	print("computed distribution of tokens across classes")
 	
 	# loading the test data
 	(test_text,test_class) = read_test_params()
 	print("successfully read test data")
-
+	
+	num_points = test_class.shape[0]
 	# calculating on test data
-	prediction = testing_time(word_count,index_mapping,count_arr,test_text,test_class)
+	prediction = testing_time_naive_split(word_count,index_mapping,count_arr,test_text,test_class,word_counter,num_points)
 	print("prediction done")
 
-	true_label_array = np.array(test_class)[0:15000,:]
 	# calculating the confusion matrix
+	true_label_array = np.array(test_class[0:num_points])
 	confatrix = confusion_matrix(true_label_array,prediction)
 	print("confusion matrix computed")
 	print(confatrix)
