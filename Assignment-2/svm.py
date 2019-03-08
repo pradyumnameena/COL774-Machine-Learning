@@ -1,5 +1,4 @@
 import csv
-import math
 import pandas as pd
 import numpy as np
 import cvxopt
@@ -39,11 +38,7 @@ def get_test_params(issubset):
 def linear_kernel(train_data,train_output):
 	# for cvxopt use
 	m = len(train_data)
-	n = train_data.shape[1]
-	X_Y = np.asmatrix(np.zeros((m,n),dtype=float))
-	for i in range(m):
-		for j in range(n):
-			X_Y[i,j] = train_output[i]*train_data[i,j]
+	X_Y = np.multiply(train_data,train_output)
 	
 	P = cvxopt.matrix(np.dot(X_Y,X_Y.transpose()))
 	q = cvxopt.matrix(-2*np.ones((m,1)))
@@ -62,7 +57,7 @@ def linear_kernel(train_data,train_output):
 # gaussian function calculator
 def gaussain_func(a,b,gamma):
 	diff = a-b
-	rv = math.exp(-1*gamma*float(np.sum(diff*diff)))
+	rv = np.exp(-1*gamma*float(np.sum(diff*diff)))
 	return rv
 
 # gaussian kernel
@@ -73,7 +68,8 @@ def gaussian_kernel(train_data,train_output,gamma):
 	X_Y = np.asmatrix(np.zeros((m,n),dtype=float))
 	for i in range(m):
 		for j in range(n):
-			X_Y[i,j] = gaussain_func(train_data[i,:],train_data[j,:],gamma)*train_output[i]*train_output[j]
+			X_Y[i,j] = gaussain_func(train_data[i,:],train_data[j,:],gamma)*train_output[i]
+			# X_Y[i,j] = gaussain_func(train_data[i,:],train_data[j,:],gamma)*train_output[i]*train_output[j]
 	
 	P = cvxopt.matrix(np.dot(X_Y,X_Y.transpose()))
 	q = cvxopt.matrix(-2*np.ones((m,1)))

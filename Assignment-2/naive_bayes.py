@@ -37,7 +37,6 @@ def get_class_count(class_array):
 def get_split_count(text_matrix,class_matrix):
 	word_count = {}
 	num_points = text_matrix.shape[0]
-
 	for i in range(num_points):
 		# splitted_string = re.sub('[^a-zA-Z0-9\s]','',text_matrix.iat[i,0]).split()
 		splitted_string = text_matrix.iat[i,0].split()
@@ -47,8 +46,7 @@ def get_split_count(text_matrix,class_matrix):
 				word_count[word][class_idx]+=1
 			else:
 				word_count[word] = [0,0,0,0,0]
-				word_count[word][class_idx]+=1
-				
+				word_count[word][class_idx]+=1		
 	return word_count
 
 # for naive split test predictions
@@ -65,16 +63,17 @@ def testing_time_split(word_count,count_arr,test_text,test_class):
 		num_words+=1
 
 	for i in range(num_points):
+		print(i)
 		prob_arr = np.log(count_arr/float(total_points))
 		# splitted_string = re.sub('[^a-zA-Z0-9\s]','',test_text.iat[i,0]).split()
 		splitted_string = test_text.iat[i,0].split()
 		for word in splitted_string:
-			if word in word_count:
+			# if word in word_count:
 				for j in range(5):
 					prob_arr[j] += np.log(float(word_count[word][j]+1)/float(class_vocab_size[0,j]+num_words))
-			else:
-				for j in range(5):
-					prob_arr[j] -= np.log(float(class_vocab_size[0,j]+num_words))
+			# else:
+				# for j in range(5):
+					# prob_arr[j] -= np.log(float(class_vocab_size[0,j]+num_words))
 		# assigning the label with maximum probabilities
 		prediction[i] = 1+np.argmax(prob_arr)
 	return prediction
