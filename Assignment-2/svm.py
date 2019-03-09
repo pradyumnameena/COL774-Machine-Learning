@@ -5,37 +5,40 @@ import cvxopt
 import cvxopt.solvers
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import f1_score
+from svmutil import *
 
 # getting the training data
 def get_train_params(issubset):
-	train_data = pd.read_csv('ass2_data_svm/train.csv',header=None,dtype=float)
+	train_data = pd.read_csv('../../ass2_data_svm/train.csv',header=None,dtype=float)
 	if issubset==True:
 		train_data = train_data.loc[(train_data[784] == 5) | (train_data[784] == 6)].values
 	train_output = train_data[:,784:785]
-	train_data = train_data[:,0:784]/256
 	for i in range(len(train_output)):
 		if train_output[i,0] == 5:
 			train_output[i,0] = 1
 		else:
 			train_output[i,0] = -1
+	train_data = train_data[:,0:784]
+	train_data = train_data/256
 	return (train_data,train_output)
 
 # get the testing data
 def get_test_params(issubset):
-	test_data = pd.read_csv('ass2_data_svm/test.csv',header=None,dtype=float)
+	test_data = pd.read_csv('../../ass2_data_svm/test.csv',header=None,dtype=float)
 	if issubset==True:
 		test_data = test_data.loc[(test_data[784] == 5) | (test_data[784] == 6)].values
 	test_output = test_data[:,784:785]
-	test_data = test_data[:,0:784]/256
 	for i in range(len(test_output)):
 		if test_output[i,0] == 5:
 			test_output[i,0] = 1
 		else:
 			test_output[i,0] = -1
+	test_data = test_data[:,0:784]
+	test_data = test_data[:,0:784]/256
 	return (test_data,test_output)
 
 # linear kernel
-def linear_kernel(train_data,train_output):
+def linear_kernel_cvxopt(train_data,train_output):
 	# for cvxopt use
 	m = len(train_data)
 	X_Y = np.multiply(train_data,train_output)
@@ -61,7 +64,7 @@ def gaussain_func(a,b,gamma):
 	return rv
 
 # gaussian kernel
-def gaussian_kernel(train_data,train_output,gamma):
+def gaussian_kernel_cvxopt(train_data,train_output,gamma):
 	# for cvxopt use
 	m = len(train_data)
 	n = train_data.shape[1]
@@ -112,6 +115,24 @@ def svm_prediction(weight_matrix,b,test_data):
 			predicted[i] = -1
 	return predicted
 
+# libsvm package
+def linear_kernel_libsvm(train_data,train_output,test_data,test_output):
+	
+	train_labels = []
+	train_input = train_data.tolist()
+	for j in train_output:
+		train_labels.extend(j)
+
+	test_labels = []
+	test_input = test_data.tolist()
+	for j in test_output:
+		test_labels.extend(j)
+	
+	problem = svm_problem(train_labels,train_input)
+	param = svm_parameter("-s 0 -c 1 -t 0")
+	model = svm_train(problem,param)
+	pred_lbl, pred_acc, pred_val = svm_predict(test_labels,test_input,model)
+
 # main function
 def main():
 	print("treating 5 as class 1 and 6 as class -1")
@@ -122,39 +143,43 @@ def main():
 	(test_data,test_output) = get_test_params(True)
 	print("normalized test data retrieved")
 
-	linear_kernel_soln = linear_kernel(train_data,train_output)
+	# linear_kernel_soln = linear_kernel_cvxopt(train_data,train_output)
 	print("linear kernel solution found")
 	
 	tolerance = 1e-8
-	(weight_matrix,b) = calculate_svm_params(linear_kernel_soln,train_data,train_output,tolerance)
+	# (weight_matrix,b) = calculate_svm_params(linear_kernel_soln,train_data,train_output,tolerance)
 	print("svm parameters computed")
 
-	predicted = svm_prediction(weight_matrix,b,test_data)
+	# predicted = svm_prediction(weight_matrix,b,test_data)
 	print("prediction complete")
 
-	confatrix = confusion_matrix(test_output,predicted)
+	# confatrix = confusion_matrix(test_output,predicted)
 	print("confusion matrix computed")
 	
 	print("below is confusion matrix for linear kernel")
-	print(confatrix)
+	# print(confatrix)
 
 	# below is for gaussian kernel
 	gamma = 0.05
-	gaussian_kernel_soln = gaussian_kernel(train_data,train_output,gamma)
+	# gaussian_kernel_soln = gaussian_kernel_cvxopt(train_data,train_output,gamma)
 	print("gaussian kernel solution found")
 	
 	tolerance = 1e-8
-	(weight_matrix,b) = calculate_svm_params(gaussian_kernel_soln,train_data,train_output,tolerance)
+	# (weight_matrix,b) = calculate_svm_params(gaussian_kernel_soln,train_data,train_output,tolerance)
 	print("svm parameters computed")
 
-	predicted = svm_prediction(weight_matrix,b,test_data)
+	# predicted = svm_prediction(weight_matrix,b,test_data)
 	print("prediction complete")
 
-	confatrix = confusion_matrix(test_output,predicted)
+	# confatrix = confusion_matrix(test_output,predicted)
 	print("confusion matrix computed")
 	
 	print("below is confusion matrix for gaussian kernel")
-	print(confatrix)
+	# print(confatrix)
+
+
+	# below id for libsvms
+	linear_kernel_libsvm(train_data,train_output,test_data,test_output)
 	return
 
 if __name__ == "__main__":
