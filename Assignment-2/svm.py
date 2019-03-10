@@ -8,26 +8,36 @@ from sklearn.metrics import f1_score
 from svmutil import *
 
 # getting the training data
-def get_train_params(train_data_path,issubset,digit):
+def get_train_params(train_data_path,issubset,digit1,digit2):
 	train_data = np.array(pd.read_csv(train_data_path,header=None,dtype=float).values)
 	train_output = np.array(train_data[:,784:785])
 
 	if issubset==True:
-		print("treating " + str(digit) + " as class 1 and " + str(digit+1) + " as class -1")
-		train_data = train_data[np.ix_((train_data[:,784]==digit) | (train_data[:,784]==digit+1))]
-		train_output = 2*digit + 1 - 2*train_data[:,784:785]
+		train_data = train_data[np.ix_((train_data[:,784]==digit1) | (train_data[:,784]==digit2))]
+		train_output = train_data[:,784:785]
+		
+		for i in range(len(train_data)):
+			if train_output[i,0] == digit1:
+				train_output[i,0] = 1
+			else:
+				train_output[i,0] = -1
 
 	train_data = train_data/256
 	return (np.asmatrix(train_data[:,0:784]),np.asmatrix(train_output))
 
 # get the testing data
-def get_test_params(test_data_path,issubset,digit):
+def get_test_params(test_data_path,issubset,digit1,digit2):
 	test_data = np.array(pd.read_csv(test_data_path,header=None,dtype=float).values)
 	test_output = np.array(test_data[:,784:785])
 
 	if issubset==True:
-		test_data = test_data[np.ix_((test_data[:,784]==digit) | (test_data[:,784]==digit+1))]
-		test_output = 2*digit + 1 - 2*test_data[:,784:785]
+		test_data = test_data[np.ix_((test_data[:,784]==digit1) | (test_data[:,784]==digit2))]
+		test_output = np.array(test_data[:,784:785])
+		for i in range(len(test_data)):
+			if test_output[i,0] == digit1:
+				test_output[i,0] = 1
+			else:
+				test_output[i,0] = -1
 	
 	test_data = test_data/256
 	return (np.asmatrix(test_data[:,0:784]),np.asmatrix(test_output))
@@ -87,9 +97,14 @@ def calculate_linear_svm_params(kernel_soln,train_data,train_output,tolerance):
 		for j in range(n):
 			weight_matrix[0,j]+=(raveled[i]*train_data[i,j]*train_output[i,0])
 		nSV+=1
-
-	idx_used_for_b = langrangian_params[0]
-	b = train_output[idx_used_for_b] - np.dot(train_data[idx_used_for_b,:],weight_matrix.transpose())[0,0]
+	b = 0
+	if nSV==0:
+		print("No support vectors found for tolerance value of " + str(tolerance))
+	else:
+		for sv_idx in langrangian_params:
+			b+=(train_output[sv_idx,0] - np.dot(train_data[sv_idx,:],weight_matrix.transpose())[0,0])
+		b = b/(float(len(langrangian_params)))
+		print(str(b) + " is the value of b")
 	return (weight_matrix,b,nSV)
 
 # predicting using parameters supplied on the supplied test_data
@@ -112,7 +127,6 @@ def gaussian_endgame(kernel_soln,train_data,train_output,test_data,tolerance,gam
 	alpha_x_label = np.asmatrix(np.zeros((len(raveled),1),dtype=float))
 	for i in range(len(raveled)):
 		if raveled[i]>tolerance:
-			print("alpha " + str(i) + "->" + str(raveled[i]))
 			alpha_x_label[i,0] = train_output[i,0]*raveled[i]*(raveled[i]>tolerance)
 			nSV+=1
 	
@@ -122,14 +136,41 @@ def gaussian_endgame(kernel_soln,train_data,train_output,test_data,tolerance,gam
 	if len(langrangian_params)<=0:
 		print("No support vectors found for tolerance value= " + str(tolerance))
 	else:
-		idx_used_for_b = langrangian_params[0]
-		b = np.sum(train_output - np.sum(np.multiply(alpha_x_label,np.exp(-1*gamma*np.sum(np.multiply(train_data-train_data[idx_used_for_b,:],train_data-train_data[idx_used_for_b,:]),axis=1)))))/(float(len(train_data)))
+		b = 0
+		for sv_idx in langrangian_params:
+			b+=(train_output[sv_idx,0] - np.sum(np.multiply(alpha_x_label,np.exp(-1*gamma*np.sum(np.multiply(train_data-train_data[sv_idx,:],train_data-train_data[sv_idx,:]),axis=1)))))
+		b = b/(float(len(langrangian_params)))
 		print(str(b) + " is the value of b")
-		# b = 0.14073416301529917
+		
 		for i in range(len(test_data)):
 			prediction[i] = np.sign(np.sum(np.multiply(alpha_x_label,np.exp(-1*gamma*(X_train - 2*X_train_X_test[:,i] + X_test[i,0])))) + b)
 
 	return (prediction,nSV)
+
+# for computing predictions for multiclass classification
+def gaussian_infinity_wars(kernel_soln_x,train_data,train_output,test_data,tolerance,gamma):
+	prediction = np.asmatrix(np.ones((len(test_data),1),dtype=int))
+	raveled = np.asmatrix(kernel_soln_x)
+	
+	X_train = np.sum(np.multiply(train_data,train_data),axis=1)
+	X_test = np.sum(np.multiply(test_data,test_data),axis=1)
+	X_train_X_test = np.dot(train_data,test_data.transpose())
+
+	alpha_x_label = np.multiply(train_output,np.multiply(raveled,raveled>tolerance))
+	langrangian_params = np.nonzero(raveled>tolerance)[0]
+
+	if len(langrangian_params)==0:
+		print("No support vectors found for tolerance value= " + str(tolerance))
+	else:
+		b = 0
+		for sv_idx in langrangian_params:
+			b+=(train_output[sv_idx,0] - np.sum(np.multiply(alpha_x_label,np.exp(-1*gamma*np.sum(np.multiply(train_data-train_data[sv_idx,:],train_data-train_data[sv_idx,:]),axis=1)))))
+		b = b/(float(len(langrangian_params)))
+		
+		for i in range(len(test_data)):
+			prediction[i,0] = np.sign(np.sum(np.multiply(alpha_x_label,np.exp(-1*gamma*(X_train - 2*X_train_X_test[:,i] + X_test[i,0])))) + b)
+
+	return prediction
 
 # libsvm package
 def libsvm(train_data,train_output,test_data,test_output,gamma,penalty):
@@ -152,6 +193,84 @@ def libsvm(train_data,train_output,test_data,test_output,gamma,penalty):
 	gaussian_model = svm_train(problem,gaussian_param)
 	gaussian_pred_lbl, gaussian_pred_acc, gaussian_pred_val = svm_predict(test_labels,test_input,gaussian_model)
 
+# multiclass gaussian
+def multiclass_svm_cvxopt(train_data_path,test_data_path,gamma,penalty,tolerance):
+	svm_dict = {}
+	num_max = 2
+	# learning parameters phase
+	for i in range(1+num_max):
+		for j in range(i):
+			idx = str(i)+str(j)
+			svm_dict[idx] = []
+			(train_data,train_output) = get_train_params(train_data_path,True,i,j)
+			kernel_soln = gaussian_kernel_cvxopt(train_data,train_output,gamma,penalty)
+			svm_dict[idx] = np.ravel(kernel_soln['x']).tolist()
+			print("langrangian parameters for svm with index value " + idx + " computed")
+
+	# prediction phase
+	(test_data,test_output) = get_test_params(test_data_path,False,0,0)
+	prediction_dict = {}
+	for i in range(len(test_data)):
+		prediction_dict[i] = [0,0,0,0,0,0,0,0,0,0]
+	prediction = np.asmatrix(np.zeros((len(test_data),1),dtype=int))
+	
+	for i in range(1+num_max):
+		for j in range(i):
+			idx = str(i)+str(j)
+			kernel_soln_x = svm_dict[idx]
+			(train_data,train_output) = get_train_params(train_data_path,True,i,j)
+			svm_prediction = gaussian_infinity_wars(kernel_soln_x,train_data,train_output,test_data,tolerance,gamma)
+			
+			for k in range(len(svm_prediction)):
+				if svm_prediction[k,0] == 1:
+					prediction_dict[k][i]+=1
+				else:
+					prediction_dict[k][j]+=1
+			print("predictions for svm with index value " + idx + " done")
+
+	for i in range(len(test_data)):
+		prediction[i] = np.argmax(prediction_dict[i])
+	return (test_output,np.array(prediction))
+
+# multiclass gaussian libsvm
+def multiclass_svm_libsvm(train_data_path,test_data_path,gamma,penalty):
+	svm_dict = {}
+	num_max = 2
+	# learning parameters phase
+	for i in range(1+num_max):
+		for j in range(i):
+			idx = str(i)+str(j)
+			svm_dict[idx] = []
+			(train_data,train_output) = get_train_params(train_data_path,True,i,j)
+			kernel_soln = gaussian_kernel_cvxopt(train_data,train_output,gamma,penalty)
+			svm_dict[idx] = np.ravel(kernel_soln['x']).tolist()
+			print("langrangian parameters for svm with index value " + idx + " computed")
+
+	# prediction phase
+	(test_data,test_output) = get_test_params(test_data_path,False,0,0)
+	prediction_dict = {}
+	for i in range(len(test_data)):
+		prediction_dict[i] = [0,0,0,0,0,0,0,0,0,0]
+	prediction = np.asmatrix(np.zeros((len(test_data),1),dtype=int))
+	
+	for i in range(1+num_max):
+		for j in range(i):
+			idx = str(i)+str(j)
+			kernel_soln_x = svm_dict[idx]
+			(train_data,train_output) = get_train_params(train_data_path,True,i,j)
+			svm_prediction = gaussian_infinity_wars(kernel_soln_x,train_data,train_output,test_data,tolerance,gamma)
+			
+			for k in range(len(svm_prediction)):
+				if svm_prediction[k,0] == 1:
+					prediction_dict[k][i]+=1
+				else:
+					prediction_dict[k][j]+=1
+			print("predictions for svm with index value " + idx + " done")
+
+	for i in range(len(test_data)):
+		prediction[i] = np.argmax(prediction_dict[i])
+	return (test_output,np.array(prediction))
+
 # main function
 def main():
 	# taking parameters from command line
@@ -159,56 +278,70 @@ def main():
 	test_data_path = sys.argv[2]
 	classification = sys.argv[3]
 	part = sys.argv[4]
-
-	# reading train and test data as array
 	issubset = (classification=='0')
-	print("reading data with normalization")
-	digit = 5
-	(train_data,train_output) = get_train_params(train_data_path,issubset,digit)
-	(test_data,test_output) = get_test_params(test_data_path,issubset,digit)
-	
+
 	if issubset==True:
+		
+		# reading train and test data as array
+		print("reading data with normalization")
+		digit1 = 5
+		digit2 = 6
+		(train_data,train_output) = get_train_params(train_data_path,issubset,digit1,digit2)
+		(test_data,test_output) = get_test_params(test_data_path,issubset,digit1,digit2)
+
 		if part == 'a':
 			tolerance = 1e-4
 			penalty = 1
-			print("tolerance value for linear kernel = " + str(tolerance))
+			print("tolerance value for linear kernel for binary classification = " + str(tolerance))
 			linear_kernel_soln = linear_kernel_cvxopt(train_data,train_output,penalty)
 			(weight_matrix,b,nSV) = calculate_linear_svm_params(linear_kernel_soln,train_data,train_output,tolerance)
 			print(str(nSV) + " support vectors")
 			predicted = linear_kernel_svm_prediction(weight_matrix,b,test_data)
 			confatrix = confusion_matrix(test_output,predicted)
 			print(confatrix)
-		
+
 		elif part =='b':
 			gamma = 0.05
 			penalty = 1
 			tolerance = 1e-4
-			print("tolerance value for gaussian kernel = " + str(tolerance))
+			print("tolerance value for gaussian kernel for binary classification = " + str(tolerance))
 			gaussian_kernel_soln = gaussian_kernel_cvxopt(train_data,train_output,gamma,penalty)
 			(predicted,nSV) = gaussian_endgame(gaussian_kernel_soln,train_data,train_output,test_data,tolerance,gamma)
 			print(str(nSV) + " support vectors")
 			confatrix = confusion_matrix(test_output,predicted)
 			print(confatrix)
-		
+
 		elif part == 'c':
 			gamma = 0.05
 			penalty = 1
 			libsvm(train_data,train_output,test_data,test_output,gamma,penalty)
 
 		else:
-			print("No such part for this classification")
+			print("No such part for binary classification")
 
 	else:
-		if part == 'a':
-			
-		elif part =='b':
-			
-		elif part == 'c':
-			
-		elif part == 'd':
 
+		if part == 'a':
+			gamma = 0.05
+			penalty = 1
+			tolerance = 1e-6
+			print("tolerance value for gaussian kernel for multiclass classification= " + str(tolerance))
+			(test_output,prediction) = multiclass_svm_cvxopt(train_data_path,test_data_path,gamma,penalty,tolerance)
+			confatrix = confusion_matrix(test_output,prediction)
+			print(confatrix)
+
+		elif part =='b':
+			gamma = 0.05
+			penalty = 1
+			(test_output,prediction) = multiclass_svm_libsvm(train_data_path,test_data_path,gamma,penalty)
+			confatrix = confusion_matrix(test_output,prediction)
+			print(confatrix)
+
+		elif part == 'd':
+			print("No such part for multiclass classification")
+			
 		else:
-			print("No such part for this classification")
+			print("No such part for multiclass classification")
 	
 	return
 
