@@ -1,127 +1,111 @@
 import re
 import sys
+import json
+import time
 import math
 import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import f1_score
 
-# reading the training data
-def read_training_params(train_data_path):
-	training_text = pd.read_csv(train_data_path,usecols=['text'],encoding="utf-8")
-	training_class = pd.read_csv(train_data_path,usecols=['stars'],dtype=int)
-	return (training_text,training_class)
+def read_file(file_path):
+	train_X = {}
+	train_Y = {}
+	counter = 0
 
-# reading the test data
-def read_test_params(test_data_path):
-	test_text = pd.read_csv(test_data_path,usecols=['text'],encoding="utf-8")
-	test_class = pd.read_csv(test_data_path,usecols=['stars'],dtype=int)
-	return (test_text,test_class)
+	for line in open(file_path, mode="r"):
+		line_contents = json.loads(line)
+		review_text = line_contents["text"].strip().lower()
+		review_text = re.sub(r'[^\w\s]','',review_text)
+		review_text = re.sub(r'[^\w\s]','',review_text)
+		review_text = re.sub('\r?\n',' ',review_text)
+		splitted_string = review_text.split()
+		train_X[counter] = splitted_string
+		train_Y[counter] = int(line_contents["stars"])
+		counter+=1
+	return (train_X,train_Y)
 
-# computing accuracy from confusion matrix
-def accuracy(confusion_matrix):
-	total_points = np.sum(confusion_matrix)
-	req = 0
-	for i in range(len(confusion_matrix)):
-		req+=confusion_matrix[i,i]
-	return (float(req)/float(total_points))
+def generate_dictionary(train_X,train_Y):
+	dictionary = {}
+	num_words = len(train_X)
+	class_occurences = [0,0,0,0,0]
+	class_vocabulary = [0,0,0,0,0]
 
-# calculates the occurences of each class
-def get_class_count(class_array):
-	count_arr = np.array([0,0,0,0,0])
-	for i in range(5):
-		count_arr[i] = np.sum(np.multiply(class_array,(class_array==(float(i+1)))))/(i+1)
-	return count_arr
-
-# get naive split tokenized count
-def get_split_count(text_matrix,class_matrix):
-	word_count = {}
-	num_points = text_matrix.shape[0]
-	for i in range(num_points):
-		# splitted_string = re.sub('[^a-zA-Z0-9\s]','',text_matrix.iat[i,0]).split()
-		splitted_string = text_matrix.iat[i,0].split()
-		class_idx = class_matrix.iat[i,0]-1
-		for word in splitted_string:
-			if word in word_count:
-				word_count[word][class_idx]+=1
+	for i in range(len(train_X)):
+		num_stars = train_Y[i]
+		class_vocabulary[num_stars-1]+=len(train_X[i])
+		class_occurences[num_stars-1]+=1
+		for word in train_X[i]:
+			if word in dictionary:
+				dictionary[word][num_stars-1]+=1
 			else:
-				word_count[word] = [0,0,0,0,0]
-				word_count[word][class_idx]+=1		
-	return word_count
+				dictionary[word] = [1,1,1,1,1]
+				dictionary[word][num_stars-1]+=1
 
-# for naive split test predictions
-def testing_time_split(word_count,count_arr,test_text,test_class):
-	num_points = test_class.shape[0]
-	prediction = np.array(np.zeros((num_points,1),dtype=int))
-	total_points = np.sum(count_arr)
-	class_vocab_size = np.asmatrix(np.zeros((1,5),dtype=int))
-	num_words = 0
-	
-	for word in word_count:
-		for i in range(5):
-			class_vocab_size[0,i]+=word_count[word][i]
-		num_words+=1
+	return (dictionary,class_occurences,class_vocabulary)
 
-	for i in range(num_points):
-		print(i)
-		prob_arr = np.log(count_arr/float(total_points))
-		# splitted_string = re.sub('[^a-zA-Z0-9\s]','',test_text.iat[i,0]).split()
-		splitted_string = test_text.iat[i,0].split()
-		for word in splitted_string:
-			# if word in word_count:
-				for j in range(5):
-					prob_arr[j] += np.log(float(word_count[word][j]+1)/float(class_vocab_size[0,j]+num_words))
-			# else:
-				# for j in range(5):
-					# prob_arr[j] -= np.log(float(class_vocab_size[0,j]+num_words))
-		# assigning the label with maximum probabilities
-		prediction[i] = 1+np.argmax(prob_arr)
+def predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary):
+	num_test_points = len(test_X)
+	num_train_points = sum(class_occurences)
+	num_distinct_words = len(dictionary)
+	prediction = [0] * num_test_points
+	class_probabilities = [0.0]*5
+	for j in range(5):
+		class_probabilities[j]=math.log((float(class_occurences[j]))/(float(num_train_points)))
+
+	for word in dictionary:
+		for j in range(5):
+			dictionary[word][j] = math.log((float(dictionary[word][j]))/(float(num_distinct_words+class_vocabulary[j])))
+
+	for i in range(num_test_points):
+		prob = [0.0,0.0,0.0,0.0,0.0]
+		for j in range(5):
+			prob[j]+=class_probabilities[j]
+			for word in test_X[i]:
+				if word in dictionary:
+					prob[j]+=dictionary[word][j]
+				else:
+					prob[j]-=math.log((float(num_distinct_words+class_vocabulary[j])))
+		prediction[i] = 1+np.argmax(prob)
 	return prediction
 
 # main function
 def main():
-	
 	# Taking parameters from command line
 	train_data_path = sys.argv[1]
   	test_data_path = sys.argv[2]
   	part = sys.argv[3]
+  	
+  	# reading training and test data from .json file
+  	time1 = time.clock()
+  	(train_X,train_Y) = read_file(train_data_path)
+  	time2 = time.clock()
+  	print(str(time2-time1) + " reading training json file")
+  	
+  	time1 = time.clock()
+  	(test_X,test_Y) = read_file(test_data_path)
+  	time2 = time.clock()
+  	print(str(time2-time1) + " reading testing json file")
 
-  	# reading the dataset from the already converted csv file into pandas dataframe
-	(training_text,training_class) = read_training_params(train_data_path)
-	(test_text,test_class) = read_test_params(test_data_path)
+  	# creating the dictionary i.e. for keeping count of words
+  	time1 = time.clock()
+  	(dictionary,class_occurences,class_vocabulary) = generate_dictionary(train_X,train_Y)
+  	time2 = time.clock()
+  	print(str(time2-time1) + " generating vocabulary")
 
-	# preprocessing the text data returns the class occurences
-	if part == 'a':
-		training_class_counts = get_class_count(np.array(training_class))
-		word_class_count = get_split_count(training_text,training_class)
-		prediction = testing_time_split(word_class_count,training_class_counts,test_text,test_class)
-		true_label_array = np.array(test_class)
-	
-		confatrix = confusion_matrix(true_label_array,prediction)
-		print(confatrix)
-		print("Accuracy obtained is " + str(accuracy(confatrix)))
-		f1_matrix = f1_score(true_label_array,prediction,average=None)
-		print(f1_matrix)
-	
-	elif part == 'b':
-		# means random prediction and majority prediction
-		training_class_counts = get_class_count(np.array(training_class))
-		num_points = test_class.shape[0]
-		random_prediction = np.random.randint(1,6,(num_points,1))
-		majority_prediction = (1+np.argmax(training_class_counts))*np.ones((num_points,1),dtype=int)
-		true_label_array = np.array(test_class[0:num_points])
-		
-		random_confatrix = confusion_matrix(true_label_array,random_prediction)
-		print("Accuracy obtained for random predictions is " + str(accuracy(random_confatrix)))
-		f1_matrix = f1_score(true_label_array,random_prediction,average=None)
-		print(f1_matrix)
+  	# prediction time on test_X
+  	time1 = time.clock()
+  	prediction = predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary)
+  	time2 = time.clock()
+  	print(str(time2-time1) + " for prediction")
+  	
+  	test_Y_array = [0]*len(test_Y)
+  	for i in range(len(test_Y)):
+  		test_Y_array[i] = test_Y[i]
 
-		majority_confatrix = confusion_matrix(true_label_array,majority_prediction)
-		print("Accuracy obtained for majority predictions is " + str(accuracy(majority_confatrix)))
-		f1_matrix = f1_score(true_label_array,majority_prediction,average=None)
-		print(f1_matrix)
-	else:
-		print("fnkjf")
+  	confatrix = confusion_matrix(test_Y_array,prediction)
+  	print(confatrix)
+  	# print((float(prediction))/(float(len(test_Y))) * 100)
 
 if __name__ == "__main__":
  	main()
