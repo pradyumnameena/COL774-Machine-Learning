@@ -1,11 +1,12 @@
 import sys
 import csv
-import pandas as pd
-import numpy as np
+import time
 import cvxopt
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import f1_score
+import numpy as np
+import pandas as pd
 from svmutil import *
+from sklearn.metrics import f1_score
+from sklearn.metrics import confusion_matrix
 
 # getting the training data
 def get_train_params(train_data_path,issubset,digit1,digit2):
@@ -22,7 +23,7 @@ def get_train_params(train_data_path,issubset,digit1,digit2):
 			else:
 				train_output[i,0] = -1
 
-	train_data = train_data/256
+	train_data = train_data/255
 	return (np.asmatrix(train_data[:,0:784]),np.asmatrix(train_output))
 
 # get the testing data
@@ -39,7 +40,7 @@ def get_test_params(test_data_path,issubset,digit1,digit2):
 			else:
 				test_output[i,0] = -1
 	
-	test_data = test_data/256
+	test_data = test_data/255
 	return (np.asmatrix(test_data[:,0:784]),np.asmatrix(test_output))
 
 # linear kernel
@@ -234,38 +235,40 @@ def multiclass_svm_cvxopt(train_data_path,test_data_path,gamma,penalty,tolerance
 
 # multiclass gaussian libsvm
 def multiclass_svm_libsvm(train_data_path,test_data_path,gamma,penalty):
-	svm_dict = {}
-	num_max = 2
-	# learning parameters phase
-	for i in range(1+num_max):
-		for j in range(i):
-			idx = str(i)+str(j)
-			svm_dict[idx] = []
-			(train_data,train_output) = get_train_params(train_data_path,True,i,j)
-			kernel_soln = gaussian_kernel_cvxopt(train_data,train_output,gamma,penalty)
-			svm_dict[idx] = np.ravel(kernel_soln['x']).tolist()
-			print("langrangian parameters for svm with index value " + idx + " computed")
-
-	# prediction phase
-	(test_data,test_output) = get_test_params(test_data_path,False,0,0)
+	# svm_dict = {}
 	prediction_dict = {}
+	num_max = 9
+	(test_data,test_output) = get_test_params(test_data_path,False,0,0)
 	for i in range(len(test_data)):
 		prediction_dict[i] = [0,0,0,0,0,0,0,0,0,0]
 	prediction = np.asmatrix(np.zeros((len(test_data),1),dtype=int))
-	
+
+	# learning parameters phase
 	for i in range(1+num_max):
 		for j in range(i):
-			idx = str(i)+str(j)
-			kernel_soln_x = svm_dict[idx]
 			(train_data,train_output) = get_train_params(train_data_path,True,i,j)
-			svm_prediction = gaussian_infinity_wars(kernel_soln_x,train_data,train_output,test_data,tolerance,gamma)
+			idx = str(i)+str(j)
+			train_labels = []
+			train_input = train_data.tolist()
+			for i1 in range(train_output.shape[0]):
+				train_labels.append(train_output[i1,0])
 			
-			for k in range(len(svm_prediction)):
-				if svm_prediction[k,0] == 1:
+			test_labels = []
+			test_input = test_data.tolist()
+			for j1 in range(test_output.shape[0]):
+				test_labels.append(test_output[j1,0])
+			
+			problem = svm_problem(train_labels,train_input)
+			gaussian_param = svm_parameter("-s 0 -c " + str(penalty) + " -t 2 -g " + str(gamma))
+			gaussian_model = svm_train(problem,gaussian_param)
+			svm_prediction_lbl,svm_prediction_acc,svm_prediction_val = svm_predict(test_labels,test_input,gaussian_model)
+			
+			for k in range(len(svm_prediction_lbl)):
+				if svm_prediction_lbl[k] == 1:
 					prediction_dict[k][i]+=1
 				else:
 					prediction_dict[k][j]+=1
-			print("predictions for svm with index value " + idx + " done")
+			print("prediction using gaussian kernel in libsvm completed for " + idx)
 
 	for i in range(len(test_data)):
 		prediction[i] = np.argmax(prediction_dict[i])
@@ -326,20 +329,26 @@ def main():
 			penalty = 1
 			tolerance = 1e-6
 			print("tolerance value for gaussian kernel for multiclass classification= " + str(tolerance))
+			t_start = time.clock()
 			(test_output,prediction) = multiclass_svm_cvxopt(train_data_path,test_data_path,gamma,penalty,tolerance)
+			t_end = time.clock()
 			confatrix = confusion_matrix(test_output,prediction)
 			print(confatrix)
+			print("time taken by cvxopt multiclass= " + str(t_end-t_start))
 
 		elif part =='b':
 			gamma = 0.05
 			penalty = 1
+			t_start = time.clock()
 			(test_output,prediction) = multiclass_svm_libsvm(train_data_path,test_data_path,gamma,penalty)
+			t_end = time.clock()
 			confatrix = confusion_matrix(test_output,prediction)
 			print(confatrix)
+			print("time taken by libsvm multiclass= " + str(t_end-t_start))
 
 		elif part == 'd':
 			print("No such part for multiclass classification")
-			
+
 		else:
 			print("No such part for multiclass classification")
 	
