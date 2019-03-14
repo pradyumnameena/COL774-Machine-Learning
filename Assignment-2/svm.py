@@ -414,10 +414,10 @@ def main():
 				gaussian_param = svm_parameter("-s 0 -c " + str(penalty) + " -t 2 -g " + str(gamma))
 				gaussian_model = svm_train(problem,gaussian_param)
 				svm_prediction_lbl,svm_prediction_acc,svm_prediction_val = svm_predict(test_labels,test_input,gaussian_model)
-				print(svm_prediction_acc)
+				# print(svm_prediction_acc)
 				test_accuracy[i] = svm_prediction_acc[0]
 				svm_prediction_lbl,svm_prediction_acc,svm_prediction_val = svm_predict(validation_labels,validation_input,gaussian_model)
-				print(svm_prediction_acc)
+				# print(svm_prediction_acc)
 				validation_set_accuracy[i] = svm_prediction_acc[0]
 			print("Validation Set Accuracy")
 			print(validation_set_accuracy)

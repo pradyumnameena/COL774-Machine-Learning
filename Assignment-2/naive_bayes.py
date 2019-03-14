@@ -15,30 +15,31 @@ from nltk import bigrams
 from nltk.stem import WordNetLemmatizer
 
 # Necessary functionas copied from utils.py
-def _stem(doc, p_stemmer, en_stop, return_tokens,use_bigram,use_lemma,use_stem):
-    tokens = word_tokenize(doc.lower())
-    if use_bigram==True:
-    	stemmed_tokens = nltk.bigrams(tokens)
-    elif use_lemma==True:
+def _stem(doc, p_stemmer, en_stop, return_tokens,feature_name):
+    if feature_name=="bigram":
+    	tokens = word_tokenize(doc.lower())
+    	stemmed_tokens = bigrams(tokens)
+    elif feature_name=="lemma":
     	lemmatizer = WordNetLemmatizer()
-    	stemmed_tokens = lemmatizer.lemmatize(tokens)
+    	stemmed_tokens = lemmatizer.lemmatize(doc.lower())
     else:
+    	tokens = word_tokenize(doc.lower())
     	stopped_tokens = filter(lambda token: token not in en_stop, tokens)
     	stemmed_tokens = map(lambda token: p_stemmer.stem(token), stopped_tokens)
     if not return_tokens:
         return ' '.join(stemmed_tokens)
     return list(stemmed_tokens)
 
-def getStemmedDocuments(docs,use_bigram,use_lemma,use_stem,return_tokens=True):
-    # en_stop = set(stopwords.words('english'))
-    # p_stemmer = PorterStemmer()
+def getStemmedDocuments(docs,feature_name,return_tokens=True):
+    en_stop = set(stopwords.words('english'))
+    p_stemmer = PorterStemmer()
     if isinstance(docs, list):
         output_docs = []
         for item in docs:
-            output_docs.append(_stem(item, p_stemmer, en_stop, return_tokens,use_bigram,use_lemma,use_stem))
+            output_docs.append(_stem(item, p_stemmer, en_stop, return_tokens,feature_name))
         return output_docs
     else:
-        return _stem(docs, p_stemmer, en_stop, return_tokens)
+        return _stem(docs, p_stemmer, en_stop, return_tokens,feature_name)
 
 # reading file specified by the given path
 def read_file(file_path):
@@ -68,12 +69,12 @@ def draw_confusion(confatrix):
 	plt.show()
 
 # generating the dictionary
-def generate_dictionary(train_X,train_Y,should_stem):
+def generate_dictionary(train_X,train_Y,feature_name):
 	dictionary = {}
 	num_words = len(train_X)
 	class_occurences = [0,0,0,0,0]
 	class_vocabulary = [0,0,0,0,0]
-	if should_stem==False:
+	if feature_name=="split":
 		for i in range(len(train_X)):
 			num_stars = train_Y[i]
 			splitted_string = train_X[i].split()
@@ -87,8 +88,10 @@ def generate_dictionary(train_X,train_Y,should_stem):
 					dictionary[word][num_stars-1]+=1
 	else:
 		for i in range(len(train_X)):
+			# if i%10000==0:
+				# print(i)
 			num_stars = train_Y[i]
-			splitted_string = getStemmedDocuments(train_X[i],False,False,True,True)
+			splitted_string = getStemmedDocuments(train_X[i],feature_name,True)
 			class_vocabulary[num_stars-1]+=len(splitted_string)
 			class_occurences[num_stars-1]+=1
 			for word in splitted_string:
@@ -101,7 +104,7 @@ def generate_dictionary(train_X,train_Y,should_stem):
 	return (dictionary,class_occurences,class_vocabulary)
 
 # prediction
-def predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,should_stem):
+def predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,feature_name):
 	num_test_points = len(test_X)
 	num_train_points = sum(class_occurences)
 	num_distinct_words = len(dictionary)
@@ -114,7 +117,7 @@ def predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,should_st
 		for j in range(5):
 			dictionary[word][j] = math.log((float(dictionary[word][j]))/(float(num_distinct_words+class_vocabulary[j])))
 
-	if should_stem==False:
+	if feature_name=="split":
 		for i in range(num_test_points):
 			prob = [0.0,0.0,0.0,0.0,0.0]
 			for j in range(5):
@@ -128,10 +131,12 @@ def predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,should_st
 			prediction[i] = 1+np.argmax(prob)
 	else:
 		for i in range(num_test_points):
+			# if i%10000==0:
+				# print(i)
 			prob = [0.0,0.0,0.0,0.0,0.0]
 			for j in range(5):
 				prob[j]+=class_probabilities[j]
-				splitted_string = getStemmedDocuments(test_X[i],False,False,True,True)
+				splitted_string = getStemmedDocuments(test_X[i],feature_name,True)
 				for word in splitted_string:
 					if word in dictionary:
 						prob[j]+=dictionary[word][j]
@@ -161,13 +166,13 @@ def main():
 
 	  	# creating the dictionary i.e. for keeping count of words
 	  	time1 = time.clock()
-	  	(dictionary,class_occurences,class_vocabulary) = generate_dictionary(train_X,train_Y,False)
+	  	(dictionary,class_occurences,class_vocabulary) = generate_dictionary(train_X,train_Y,"split")
 	  	time2 = time.clock()
 	  	print(str(time2-time1) + " generating vocabulary")
 
 	  	# prediction time on test_X
 	  	time1 = time.clock()
-	  	prediction = predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,False)
+	  	prediction = predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,"split")
 	  	time2 = time.clock()
 	  	print(str(time2-time1) + " for prediction")
   	
@@ -189,21 +194,21 @@ def main():
 	elif part=='b':
 		# means random and majority prediction
 		# reading training and test data from .json file
-  		# time1 = time.clock()
+  		time1 = time.clock()
   		(train_X,train_Y) = read_file(train_data_path)
-  		# time2 = time.clock()
-  		# print(str(time2-time1) + " reading training json file")
+  		time2 = time.clock()
+  		print(str(time2-time1) + " reading training json file")
 		
-		# time1 = time.clock()
+		time1 = time.clock()
   		(test_X,test_Y) = read_file(test_data_path)
-  		# time2 = time.clock()
-  		# print(str(time2-time1) + " reading testing json file")
+  		time2 = time.clock()
+  		print(str(time2-time1) + " reading testing json file")
 
   		# creating the dictionary i.e. for keeping count of words
-	  	# time1 = time.clock()
-	  	(dictionary,class_occurences,class_vocabulary) = generate_dictionary(train_X,train_Y)
-	  	# time2 = time.clock()
-	  	# print(str(time2-time1) + " generating vocabulary")
+	  	time1 = time.clock()
+	  	(dictionary,class_occurences,class_vocabulary) = generate_dictionary(train_X,train_Y,"split")
+	  	time2 = time.clock()
+	  	print(str(time2-time1) + " generating vocabulary")
 
 	  	test_Y_array = [0]*len(test_Y)
 	  	for i in range(len(test_Y)):
@@ -224,27 +229,70 @@ def main():
 
 	elif part=='d':
 		# reading training and test data from .json file
-  		# time1 = time.clock()
+  		time1 = time.clock()
   		(train_X,train_Y) = read_file(train_data_path)
-  		# time2 = time.clock()
-  		# print(str(time2-time1) + " reading training json file")
+  		time2 = time.clock()
+  		print(str(time2-time1) + " reading training json file")
 		
-		# time1 = time.clock()
+		time1 = time.clock()
   		(test_X,test_Y) = read_file(test_data_path)
-  		# time2 = time.clock()
-  		# print(str(time2-time1) + " reading testing json file")
+  		time2 = time.clock()
+  		print(str(time2-time1) + " reading testing json file")
 
 	  	# creating the dictionary i.e. for keeping count of words
-	  	# time1 = time.clock()
-	  	(dictionary,class_occurences,class_vocabulary) = generate_dictionary(train_X,train_Y,True)
-	  	# time2 = time.clock()
-	  	# print(str(time2-time1) + " generating vocabulary")
+	  	time1 = time.clock()
+	  	(dictionary,class_occurences,class_vocabulary) = generate_dictionary(train_X,train_Y,"stemming")
+	  	time2 = time.clock()
+	  	print(str(time2-time1) + " generating vocabulary")
 
 	  	# prediction time on test_X
-	  	# time1 = time.clock()
-	  	prediction = predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,True)
-	  	# time2 = time.clock()
-	  	# print(str(time2-time1) + " for prediction")
+	  	time1 = time.clock()
+	  	prediction = predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,"stemming")
+	  	time2 = time.clock()
+	  	print(str(time2-time1) + " for prediction")
+  	
+	  	test_Y_array = [0]*len(test_Y)
+	  	for i in range(len(test_Y)):
+	  		test_Y_array[i] = test_Y[i]
+
+	  	confatrix = confusion_matrix(test_Y_array,prediction)
+	  	f1_matrix = f1_score(test_Y_array,prediction,average=None)
+	  	macro_f1 = f1_score(test_Y_array,prediction,average='macro')
+	  	print("Confusion Matrix")
+	  	print(confatrix)
+	  	print("F1 Score")
+	  	print(f1_matrix)
+	  	print("Macro F1 Score")
+	  	print(macro_f1)
+	  	# draw_confusion(confatrix)
+
+	elif part=='e':
+		feature_name = "bigram"
+		# feature_name = "lemma"
+		# feature_name = "stemming"
+		# feature_name = "split"
+		# reading training and test data from .json file
+  		time1 = time.clock()
+  		(train_X,train_Y) = read_file(train_data_path)
+  		time2 = time.clock()
+  		print(str(time2-time1) + " reading training json file")
+		
+		time1 = time.clock()
+  		(test_X,test_Y) = read_file(test_data_path)
+  		time2 = time.clock()
+  		print(str(time2-time1) + " reading testing json file")
+
+	  	# creating the dictionary i.e. for keeping count of words
+	  	time1 = time.clock()
+	  	(dictionary,class_occurences,class_vocabulary) = generate_dictionary(train_X,train_Y,feature_name)
+	  	time2 = time.clock()
+	  	print(str(time2-time1) + " generating vocabulary")
+
+	  	# prediction time on test_X
+	  	time1 = time.clock()
+	  	prediction = predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,feature_name)
+	  	time2 = time.clock()
+	  	print(str(time2-time1) + " for prediction")
   	
 	  	test_Y_array = [0]*len(test_Y)
 	  	for i in range(len(test_Y)):
@@ -253,6 +301,12 @@ def main():
 	  	confatrix = confusion_matrix(test_Y_array,prediction)
 	  	print("Confusion Matrix")
 	  	print(confatrix)
+	  	f1_matrix = f1_score(test_Y_array,prediction,average=None)
+	  	print("F1 Score")
+	  	print(f1_matrix)
+	  	macro_f1 = f1_score(test_Y_array,prediction,average='macro')
+	  	print("Macro F1 Score")
+	  	print(macro_f1)
 	  	# draw_confusion(confatrix)
 
 	else:
