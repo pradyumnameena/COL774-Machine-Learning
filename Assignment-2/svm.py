@@ -205,7 +205,7 @@ def gaussian_prediction_with_alphas(kernel_soln_x,train_data,train_output,test_d
 
 def multiclass_svm_cvxopt(train_data_path,test_data_path,gamma,penalty,tolerance):
 	svm_dict = {}
-	num_max = 2
+	num_max = 1
 	# learning parameters phase
 	for i in range(1+num_max):
 		for j in range(i):
@@ -380,7 +380,8 @@ def main():
 			# draw_confusion(confatrix)
 		elif part == 'd':
 			gamma = 0.05
-			penalty_array = [0.00001,0.001,1,5,10]
+			penalty_array = [0.00001,0.01,1,5,10]
+			# penalty_array = [0.01,1,5,10]
 			validation_set_accuracy = np.zeros((1,5),dtype=float)
 			test_accuracy = np.zeros((1,5),dtype=float)
 			
@@ -413,8 +414,10 @@ def main():
 				gaussian_param = svm_parameter("-s 0 -c " + str(penalty) + " -t 2 -g " + str(gamma))
 				gaussian_model = svm_train(problem,gaussian_param)
 				svm_prediction_lbl,svm_prediction_acc,svm_prediction_val = svm_predict(test_labels,test_input,gaussian_model)
+				print(svm_prediction_acc)
 				test_accuracy[i] = svm_prediction_acc[0]
 				svm_prediction_lbl,svm_prediction_acc,svm_prediction_val = svm_predict(validation_labels,validation_input,gaussian_model)
+				print(svm_prediction_acc)
 				validation_set_accuracy[i] = svm_prediction_acc[0]
 			print("Validation Set Accuracy")
 			print(validation_set_accuracy)

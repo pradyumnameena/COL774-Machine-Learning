@@ -11,23 +11,31 @@ from sklearn.metrics import confusion_matrix
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem.porter import PorterStemmer
+from nltk import bigrams
+from nltk.stem import WordNetLemmatizer
 
 # Necessary functionas copied from utils.py
-def _stem(doc, p_stemmer, en_stop, return_tokens):
+def _stem(doc, p_stemmer, en_stop, return_tokens,use_bigram,use_lemma,use_stem):
     tokens = word_tokenize(doc.lower())
-    stopped_tokens = filter(lambda token: token not in en_stop, tokens)
-    stemmed_tokens = map(lambda token: p_stemmer.stem(token), stopped_tokens)
+    if use_bigram==True:
+    	stemmed_tokens = nltk.bigrams(tokens)
+    elif use_lemma==True:
+    	lemmatizer = WordNetLemmatizer()
+    	stemmed_tokens = lemmatizer.lemmatize(tokens)
+    else:
+    	stopped_tokens = filter(lambda token: token not in en_stop, tokens)
+    	stemmed_tokens = map(lambda token: p_stemmer.stem(token), stopped_tokens)
     if not return_tokens:
         return ' '.join(stemmed_tokens)
     return list(stemmed_tokens)
 
-def getStemmedDocuments(docs, return_tokens=True):
-    en_stop = set(stopwords.words('english'))
-    p_stemmer = PorterStemmer()
+def getStemmedDocuments(docs,use_bigram,use_lemma,use_stem,return_tokens=True):
+    # en_stop = set(stopwords.words('english'))
+    # p_stemmer = PorterStemmer()
     if isinstance(docs, list):
         output_docs = []
         for item in docs:
-            output_docs.append(_stem(item, p_stemmer, en_stop, return_tokens))
+            output_docs.append(_stem(item, p_stemmer, en_stop, return_tokens,use_bigram,use_lemma,use_stem))
         return output_docs
     else:
         return _stem(docs, p_stemmer, en_stop, return_tokens)
@@ -80,7 +88,7 @@ def generate_dictionary(train_X,train_Y,should_stem):
 	else:
 		for i in range(len(train_X)):
 			num_stars = train_Y[i]
-			splitted_string = getStemmedDocuments(train_X[i],True)
+			splitted_string = getStemmedDocuments(train_X[i],False,False,True,True)
 			class_vocabulary[num_stars-1]+=len(splitted_string)
 			class_occurences[num_stars-1]+=1
 			for word in splitted_string:
@@ -123,7 +131,7 @@ def predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,should_st
 			prob = [0.0,0.0,0.0,0.0,0.0]
 			for j in range(5):
 				prob[j]+=class_probabilities[j]
-				splitted_string = getStemmedDocuments(test_X[i],True)
+				splitted_string = getStemmedDocuments(test_X[i],False,False,True,True)
 				for word in splitted_string:
 					if word in dictionary:
 						prob[j]+=dictionary[word][j]
@@ -141,27 +149,27 @@ def main():
   	
   	if part=='a':
 		# reading training and test data from .json file
-  		# time1 = time.clock()
+  		time1 = time.clock()
   		(train_X,train_Y) = read_file(train_data_path)
-  		# time2 = time.clock()
-  		# print(str(time2-time1) + " reading training json file")
+  		time2 = time.clock()
+  		print(str(time2-time1) + " reading training json file")
 		
-		# time1 = time.clock()
+		time1 = time.clock()
   		(test_X,test_Y) = read_file(test_data_path)
-  		# time2 = time.clock()
-  		# print(str(time2-time1) + " reading testing json file")
+  		time2 = time.clock()
+  		print(str(time2-time1) + " reading testing json file")
 
 	  	# creating the dictionary i.e. for keeping count of words
-	  	# time1 = time.clock()
+	  	time1 = time.clock()
 	  	(dictionary,class_occurences,class_vocabulary) = generate_dictionary(train_X,train_Y,False)
-	  	# time2 = time.clock()
-	  	# print(str(time2-time1) + " generating vocabulary")
+	  	time2 = time.clock()
+	  	print(str(time2-time1) + " generating vocabulary")
 
 	  	# prediction time on test_X
-	  	# time1 = time.clock()
+	  	time1 = time.clock()
 	  	prediction = predict(dictionary,test_X,test_Y,class_occurences,class_vocabulary,False)
-	  	# time2 = time.clock()
-	  	# print(str(time2-time1) + " for prediction")
+	  	time2 = time.clock()
+	  	print(str(time2-time1) + " for prediction")
   	
 	  	test_Y_array = [0]*len(test_Y)
 	  	for i in range(len(test_Y)):
