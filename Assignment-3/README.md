@@ -9,5 +9,4 @@ Click [here](https://docs.google.com/document/d/1N5b3_DP649q8z6UsubnyO47vMeagCoU
 [Random Forests](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)</br>
 [CART Algorithm](https://en.wikipedia.org/wiki/Predictive_analytics#Classification_and_regression_trees_.28CART.29)</br>
 [One Hot encoding](https://www.kaggle.com/dansbecker/using-categorical-data-with-one-hot-encoding)</br>
-
 [Sub-gradient](https://en.wikipedia.org/wiki/Subderivative)
