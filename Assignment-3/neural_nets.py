@@ -145,7 +145,8 @@ def prediction(params,data_x,activation):
 
 def main():
 	train_datapath = "dataset/neural_net/poker-hand-training-true.data"
-	test_datapath = "dataset/neural_net/poker-hand-testing.data"
+	# test_datapath = "dataset/neural_net/poker-hand-testing.data"
+	test_datapath = "dataset/neural_net/poker-hand-training-true.data"
 
 	# train_datapath = "../Assignment_2/mnist/train.csv"
 	# test_datapath = "../Assignment_2/mnist/test.csv"
@@ -159,13 +160,14 @@ def main():
 	# generate_ohe(test_x,"test_x.csv")
 
 	train_x = np.asmatrix(pd.read_csv("train_x.csv",header=None,dtype=int))
-	test_x = np.asmatrix(pd.read_csv("test_x.csv",header=None,dtype=int))
+	# test_x = np.asmatrix(pd.read_csv("test_x.csv",header=None,dtype=int))
+	test_x = np.asmatrix(pd.read_csv("train_x.csv",header=None,dtype=int))
 
-	learning_rate = 0.1
+	learning_rate = 0.001
 	architecture_details = [25]
 	num_outputs = 10
-	epochs = 2000
-	batch_size = 100
+	epochs = 3000
+	batch_size = 25
 	num_datapoints = len(train_x)
 	modified_y = modify_output(train_y,num_outputs)
 	error = 10
@@ -181,7 +183,7 @@ def main():
 	cost_list = []
 	counter = 0
 	
-	while error>epsilon:
+	while error>epsilon and counter<epochs:
 		train_x = np.random.permutation(train_x)
 		for batch_counter in range(num_datapoints/batch_size):
 			begin = batch_counter*batch_size
