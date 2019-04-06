@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn import tree
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
+from scipy.stats import entropy
 
 class tree_Node:
 	def __init__(self,datapoints_indices,parent,val=None,childs = [],num_nodes=1,feature_index=-1,answer=0):
@@ -34,7 +35,7 @@ def scikit_decision_tree(train_datapath,test_datapath,validation_datapath):
 	(test_x,test_y) = read_file(test_datapath,True)
 	(val_x,val_y) = read_file(validation_datapath,True)
 	
-	criteria = "entropy"
+	criteria = "my_entropy"
 	split = "best"
 	# best depth = 3
 	depth = 3
@@ -48,85 +49,98 @@ def scikit_decision_tree(train_datapath,test_datapath,validation_datapath):
 	print(confatrix)
 	print("Accuracy: " + str(accuracy_score(val_y,predicted)))
 
-def pre_processing(mat,non_continuous_columns,neg_values_indices,amount):
+def pre_processing(mat,non_continuous_columns,neg_values_indices):
 	median = np.asmatrix(np.median(mat,axis=0),dtype=int)
 	new_data = np.multiply(np.asmatrix(np.ones(mat.shape,dtype=int)),mat>median)
 	for i in non_continuous_columns:
 		new_data[:,i] = mat[:,i]
-	for i in neg_values_indices:
-		new_data[:,i]+=amount
 	return new_data
 
-def entropy(datapoints_indices,data_y):
+def my_entropy(datapoints_indices,data_y):
 	new_list = []
 	for i in datapoints_indices:
 		new_list.append(data_y[i,0])
 	bin_count = np.divide(np.bincount(new_list),1.0*len(datapoints_indices))
 	for j in range(len(bin_count)):
 		if bin_count[j]==0:
-			bin_count[j] = 1
-	return -1*np.sum(np.multiply(bin_count,np.divide(np.log(bin_count),np.log(2))))
+			bin_count[j] = 1		
+	return -1*np.sum(np.multiply(bin_count,np.log(bin_count)))
 
 def split_parent(feature_index,datapoints_indices,data_x):
 	a = np.unique(np.ravel(data_x[:,feature_index]))
 	dicti = {}
-	for value in a:
-		for i in datapoints_indices:
+	for i in datapoints_indices:
+		for value in a:
 			if data_x[i,feature_index]==value:
 				if value in dicti:
 					dicti[value].append(i)
 				else:
 					dicti[value] = [i]
+				break
 	return dicti
 
+def info_gain(feature_index,datapoints_indices,data_x,data_y):
+	dicti = split_parent(feature_index,datapoints_indices,data_x)
+	ig = my_entropy(datapoints_indices,data_y) - (sum((len(dicti[prob]) * my_entropy(dicti[prob],data_y)) for prob in dicti.keys()))/len(datapoints_indices)
+	return ig
+
 def best_feature(datapoints_indices,data_x,data_y):
-	max_gain = -1.5
+	max_gain = -1
 	best_feature = -1
 	for i in range(data_x.shape[1]):
-		dicti = split_parent(i,datapoints_indices,data_x)
-		info_gain = entropy(datapoints_indices,data_y) - sum(((len(dicti[prob]) * entropy(dicti[prob],data_y))/len(datapoints_indices)) for prob in dicti.keys())
-		if info_gain>max_gain:
-			max_gain = info_gain
+		ig = info_gain(i,datapoints_indices,data_x,data_y)
+		if ig>max_gain:
+			max_gain = ig
 			best_feature = i
-	# print(best_feature)
-	# print(max_gain)
 	return (best_feature,max_gain)
 
-def grow_tree(data_x,data_y,datapoints_indices,parent = None):
-	(bf,info_gain) = best_feature(datapoints_indices,data_x,data_y)
-	if bf !=-1 and info_gain>0:
-		parent_node = tree_Node(datapoints_indices,parent,feature_index=bf)
-		dicti = split_parent(bf,datapoints_indices,data_x)
-		# print(bf,info_gain)
-		if len(dicti)==1:
-			parent_node.answer = dicti.keys()[0]
-			return parent_node
-		for val in dicti:
-			child = grow_tree(data_x,data_y,dicti[val],parent_node)
-			child.val = val
-			parent_node.childs.append(child)
-			parent_node.num_nodes+=child.num_nodes
-		return parent_node
-	else:
-		new_list = []
-		for i in datapoints_indices:
-			new_list.append(data_y[i,0])
-		ans = np.argmax(np.bincount(new_list))
-		return tree_Node(datapoints_indices,None,answer=ans)
-
-def get_class(tree,data_point):
-	if tree.feature_index!=-1:
-		for i in range(len(tree.childs)):
-			if tree.childs[i].val == data_point[0,tree.childs[i].feature_index]:
-				return get_class(tree.childs[i],data_point)
-	else:
+def get_class(tree,data_point,train_y):
+	if tree.feature_index==-1:
 		return tree.answer
+	else:
+		for i in range(len(tree.childs)):
+			if data_point[tree.feature_index]==tree.childs[i].val:
+				j = i
+				return get_class(tree.childs[j],data_point,train_y)
+		if i==len(tree.childs)-1:
+			new_list = []
+			for i in tree.indices:
+				new_list.append(train_y[i,0])
+			return np.argmax(np.bincount(new_list))
 
-def predict(tree,test_x):
-	predicted = np.asmatrix(np.zeros((len(test_x),1),dtype=int))
-	for i in range(len(test_x)):
-		predicted[i,0] = get_class(tree,test_x[i,:])
+def predict(tree,test_x,test_y):
+	predicted = np.asmatrix(np.zeros((test_x.shape[0],1),dtype=int))
+	for j in range(test_x.shape[0]):
+		predicted[j,0] = get_class(tree,np.ravel(test_x[j,:]),test_y)
 	return predicted
+
+def grow_tree(train_x,train_y,datapoints_indices,parent):
+	(bf,max_gain) = best_feature(datapoints_indices,train_x,train_y)
+	node = tree_Node(datapoints_indices,parent,feature_index=bf)
+	new_list = []
+	for i in datapoints_indices:
+		new_list.append(train_y[i,0])
+	
+	if len(set(new_list))<=1:
+		node.feature_index = -1
+		node.answer = np.argmax(np.bincount(new_list))
+		return node
+	
+	if max_gain>=0:
+		dicti = split_parent(bf,datapoints_indices,train_x)
+		if len(dicti)==1:
+			node.feature_index = -1
+			new_list = []
+			for i in dicti.values()[0]:
+				new_list.append(train_y[i,0])
+			node.answer = np.argmax(np.bincount(new_list))
+			return node
+		for val in dicti.keys():
+			child = grow_tree(train_x,train_y,dicti[val],node)
+			child.val = val
+			node.childs.append(child)
+			node.num_nodes+=child.num_nodes
+		return node
 
 def main():
 	train_datapath = sys.argv[1]
@@ -138,19 +152,27 @@ def main():
 	(val_x,val_y) = read_file(validation_datapath,False)
 	non_continuous_columns = [1,2,3,5,6,7,8,9,10]
 	neg_values_indices = [5,6,7,8,9,10]
-	amount = 2
-	train_x_new = pre_processing(train_x,non_continuous_columns,neg_values_indices,amount)
-	test_x_new = pre_processing(test_x,non_continuous_columns,neg_values_indices,amount)
-	
+	train_x_new = pre_processing(train_x,non_continuous_columns,neg_values_indices)
+	test_x_new = pre_processing(test_x,non_continuous_columns,neg_values_indices)
+	validation_x_new = pre_processing(val_x,non_continuous_columns,neg_values_indices)
+
 	datapoints_indices = []
-	for i in range(train_x.shape[0]):
+	for i in range(train_x.shape[0]/100):
 		datapoints_indices.append(i)
-	tree = grow_tree(train_x_new,train_y,datapoints_indices)
+	tree = grow_tree(train_x_new,train_y,datapoints_indices,parent=None)
 	print("Total Nodes = " + str(tree.num_nodes))
-	predicted = predict(tree,test_x_new)
-	confatrix = confusion_matrix(test_y,predicted)
-	print(confatrix)
+	
+	predicted = predict(tree,test_x_new,train_y)
+	print(confusion_matrix(test_y,predicted))
 	print(accuracy_score(test_y,predicted))
+
+	predicted = predict(tree,train_x_new,train_y)
+	print(confusion_matrix(train_y,predicted))
+	print(accuracy_score(train_y,predicted))
+
+	predicted = predict(tree,validation_x_new,train_y)
+	print(confusion_matrix(val_y,predicted))
+	print(accuracy_score(val_y,predicted))
 
 if __name__ == "__main__":
 	main()
