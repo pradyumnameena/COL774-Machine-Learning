@@ -6,10 +6,14 @@ from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 
 class tree_Node:
-	def __init__(self,isleaf,datapoints_indices,childs = []):
-		self.isleaf = isleaf
+	def __init__(self,datapoints_indices,parent,val=None,childs = [],num_nodes=1,feature_index=-1,answer=0):
 		self.indices = datapoints_indices
 		self.childs = childs
+		self.parent = parent
+		self.val = val
+		self.feature_index = feature_index
+		self.num_nodes = num_nodes
+		self.answer = answer
 
 def read_file(datapath,array_form):
 	full_data = pd.read_csv(datapath)
@@ -86,21 +90,43 @@ def best_feature(datapoints_indices,data_x,data_y):
 			best_feature = i
 	# print(best_feature)
 	# print(max_gain)
-	return best_feature
+	return (best_feature,max_gain)
 
-def grow_tree(data_x,data_y):
-	datapoints_indices = []
-	for i in range(data_x.shape[0]):
-		datapoints_indices.append(i)
-	
-	bf = best_feature(datapoints_indices,data_x,data_y)
-	if bf !=-1:
-		
+def grow_tree(data_x,data_y,datapoints_indices,parent = None):
+	(bf,info_gain) = best_feature(datapoints_indices,data_x,data_y)
+	if bf !=-1 and info_gain>0:
+		parent_node = tree_Node(datapoints_indices,parent,feature_index=bf)
+		dicti = split_parent(bf,datapoints_indices,data_x)
+		# print(bf,info_gain)
+		if len(dicti)==1:
+			parent_node.answer = dicti.keys()[0]
+			return parent_node
+		for val in dicti:
+			child = grow_tree(data_x,data_y,dicti[val],parent_node)
+			child.val = val
+			parent_node.childs.append(child)
+			parent_node.num_nodes+=child.num_nodes
+		return parent_node
 	else:
-		return tree_Node(True,datapoints_indices,[])
+		new_list = []
+		for i in datapoints_indices:
+			new_list.append(data_y[i,0])
+		ans = np.argmax(np.bincount(new_list))
+		return tree_Node(datapoints_indices,None,answer=ans)
+
+def get_class(tree,data_point):
+	if tree.feature_index!=-1:
+		for i in range(len(tree.childs)):
+			if tree.childs[i].val == data_point[0,tree.childs[i].feature_index]:
+				return get_class(tree.childs[i],data_point)
+	else:
+		return tree.answer
 
 def predict(tree,test_x):
-	return 0
+	predicted = np.asmatrix(np.zeros((len(test_x),1),dtype=int))
+	for i in range(len(test_x)):
+		predicted[i,0] = get_class(tree,test_x[i,:])
+	return predicted
 
 def main():
 	train_datapath = sys.argv[1]
@@ -115,7 +141,12 @@ def main():
 	amount = 2
 	train_x_new = pre_processing(train_x,non_continuous_columns,neg_values_indices,amount)
 	test_x_new = pre_processing(test_x,non_continuous_columns,neg_values_indices,amount)
-	tree = grow_tree(train_x_new,train_y)
+	
+	datapoints_indices = []
+	for i in range(train_x.shape[0]):
+		datapoints_indices.append(i)
+	tree = grow_tree(train_x_new,train_y,datapoints_indices)
+	print("Total Nodes = " + str(tree.num_nodes))
 	predicted = predict(tree,test_x_new)
 	confatrix = confusion_matrix(test_y,predicted)
 	print(confatrix)
