@@ -2,9 +2,9 @@ import sys
 import numpy as np
 import pandas as pd
 from sklearn import tree
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
-from scipy.stats import entropy
 
 class tree_Node:
 	def __init__(self,datapoints_indices,parent,val=-1,childs = [],num_nodes=1,feature_index=-1,answer=0):
@@ -30,24 +30,12 @@ def read_file(datapath,array_form):
 		y = full_data_arr[:,data_shape[1]-1:data_shape[1]]
 		return (x,y)
 
-def scikit_decision_tree(train_datapath,test_datapath,validation_datapath):
-	(train_x,train_y) = read_file(train_datapath,True)
-	(test_x,test_y) = read_file(test_datapath,True)
-	(val_x,val_y) = read_file(validation_datapath,True)
-	
-	criteria = "my_entropy"
-	split = "best"
-	# best depth = 3
-	depth = 3
-	min_sample_leaf = 4
-	min_sample_split = 2
-
-	dec_tree = tree.DecisionTreeClassifier(criterion=criteria,splitter="best",max_depth=depth,min_samples_split=min_sample_split,min_samples_leaf=min_sample_leaf)
-	dec_tree = dec_tree.fit(train_x,train_y)
-	predicted = np.array(dec_tree.predict(val_x),dtype=int)
-	confatrix = confusion_matrix(val_y,predicted)
-	print(confatrix)
-	print("Accuracy: " + str(accuracy_score(val_y,predicted)))
+def ohe_func(mat,categorical_features,num_categories,negative_cols):
+	for i in negative_cols:
+		mat[:,i]+=2
+	num_features = mat.shape[1]-len(categorical_features) + np.sum(num_categories)
+	ret_mat = np.asmatrix(np.zeros((len(mat),num_features),dtype=int))
+	return mat
 
 def pre_processing(mat,non_continuous_columns,negative_cols):
 	median = np.asmatrix(np.median(mat,axis=0),dtype=int)
@@ -158,40 +146,199 @@ def grow_tree(train_x,train_y,datapoints_indices,parent=None):
 		return node
 
 def main():
-	train_datapath = sys.argv[1]
-	test_datapath = sys.argv[2]
-	validation_datapath = sys.argv[3]
+	part_num = (int)(sys.argv[1])
+	train_datapath = sys.argv[2]
+	test_datapath = sys.argv[3]
+	validation_datapath = sys.argv[4]
+
+	if part_num==1:
+		(train_x,train_y) = read_file(train_datapath,False)
+		(test_x,test_y) = read_file(test_datapath,False)
+		(val_x,val_y) = read_file(validation_datapath,False)
+		
+		non_continuous_columns = [1,2,3,5,6,7,8,9,10]
+		negative_cols = [5,6,7,8,9,10]
+		train_x_new = pre_processing(train_x,non_continuous_columns,negative_cols)
+		test_x_new = pre_processing(test_x,non_continuous_columns,negative_cols)
+		validation_x_new = pre_processing(val_x,non_continuous_columns,negative_cols)
+
+		datapoints_indices = []
+		for i in range(train_x.shape[0]):
+			datapoints_indices.append(i)
+		
+		my_tree = grow_tree(train_x_new,train_y,datapoints_indices)
+		# print_tree(tree)
+		print("Total Nodes = " + str(my_tree.num_nodes))
+
+		print("Training Data")
+		predicted = predict(my_tree,train_x_new)
+		print(confusion_matrix(train_y,predicted))
+		print(accuracy_score(train_y,predicted))
+
+		print("Testing Data")
+		predicted = predict(my_tree,test_x_new)
+		print(confusion_matrix(test_y,predicted))
+		print(accuracy_score(test_y,predicted))
+
+		print("Validation Data")
+		predicted = predict(my_tree,validation_x_new)
+		print(confusion_matrix(val_y,predicted))
+		print(accuracy_score(val_y,predicted))
 	
-	(train_x,train_y) = read_file(train_datapath,False)
-	(test_x,test_y) = read_file(test_datapath,False)
-	(val_x,val_y) = read_file(validation_datapath,False)
-	non_continuous_columns = [1,2,3,5,6,7,8,9,10]
-	negative_cols = [5,6,7,8,9,10]
-	train_x_new = pre_processing(train_x,non_continuous_columns,negative_cols)
-	test_x_new = pre_processing(test_x,non_continuous_columns,negative_cols)
-	validation_x_new = pre_processing(val_x,non_continuous_columns,negative_cols)
+	elif part_num==2:
+		(train_x,train_y) = read_file(train_datapath,False)
+		(test_x,test_y) = read_file(test_datapath,False)
+		(val_x,val_y) = read_file(validation_datapath,False)
+		
+		non_continuous_columns = [1,2,3,5,6,7,8,9,10]
+		negative_cols = [5,6,7,8,9,10]
+		train_x_new = pre_processing(train_x,non_continuous_columns,negative_cols)
+		test_x_new = pre_processing(test_x,non_continuous_columns,negative_cols)
+		validation_x_new = pre_processing(val_x,non_continuous_columns,negative_cols)
 
-	datapoints_indices = []
-	for i in range(train_x.shape[0]):
-		datapoints_indices.append(i)
-	tree = grow_tree(train_x_new,train_y,datapoints_indices)
-	# print_tree(tree)
-	print("Total Nodes = " + str(tree.num_nodes))
-	
-	print("Training Data")
-	predicted = predict(tree,train_x_new)
-	print(confusion_matrix(train_y,predicted))
-	print(accuracy_score(train_y,predicted))
+		datapoints_indices = []
+		for i in range(train_x.shape[0]):
+			datapoints_indices.append(i)
+		
+		my_tree = grow_tree(train_x_new,train_y,datapoints_indices)
+		
+		# DO PRUNING HERE
 
-	print("Testing Data")
-	predicted = predict(tree,test_x_new)
-	print(confusion_matrix(test_y,predicted))
-	print(accuracy_score(test_y,predicted))
+		# print_tree(tree)
+		print("Total Nodes = " + str(my_tree.num_nodes))
 
-	print("Validation Data")
-	predicted = predict(tree,validation_x_new)
-	print(confusion_matrix(val_y,predicted))
-	print(accuracy_score(val_y,predicted))
+		print("Training Data")
+		predicted = predict(my_tree,train_x_new)
+		print(confusion_matrix(train_y,predicted))
+		print(accuracy_score(train_y,predicted))
+
+		print("Testing Data")
+		predicted = predict(my_tree,test_x_new)
+		print(confusion_matrix(test_y,predicted))
+		print(accuracy_score(test_y,predicted))
+
+		print("Validation Data")
+		predicted = predict(my_tree,validation_x_new)
+		print(confusion_matrix(val_y,predicted))
+		print(accuracy_score(val_y,predicted))
+
+	elif part_num==3:
+		print(part_num)
+
+	elif part_num==4:
+		(train_x,train_y) = read_file(train_datapath,True)
+		(test_x,test_y) = read_file(test_datapath,True)
+		(val_x,val_y) = read_file(validation_datapath,True)
+		
+		criteria = "entropy"
+		split = "best"
+		# best depth = 3
+		depth = 3
+		min_sample_leaf = 4
+		min_sample_split = 2
+
+		dec_tree = tree.DecisionTreeClassifier(criterion=criteria,splitter="best",max_depth=depth,min_samples_split=min_sample_split,min_samples_leaf=min_sample_leaf)
+		dec_tree = dec_tree.fit(train_x,train_y)
+		
+		print("Training Set")
+		predicted_train = np.array(dec_tree.predict(train_x),dtype=int)
+		confatrix_train = confusion_matrix(train_y,predicted_train)
+		print(confatrix_train)
+		print("Accuracy: " + str(accuracy_score(train_y,predicted_train)))
+
+		print("Test Set")
+		predicted_test = np.array(dec_tree.predict(test_x),dtype=int)
+		confatrix_test = confusion_matrix(test_y,predicted_test)
+		print(confatrix_test)
+		print("Accuracy: " + str(accuracy_score(test_y,predicted_test)))
+
+		print("Validation Set")
+		predicted_val = np.array(dec_tree.predict(val_x),dtype=int)
+		confatrix_val = confusion_matrix(val_y,predicted_val)
+		print(confatrix_val)
+		print("Accuracy: " + str(accuracy_score(val_y,predicted_val)))
+
+	elif part_num==5:
+		categorical_features = [1,2,3,5,6,7,8,9,10]
+		num_categories = [4,4,4,4,4,4,4,4,4]
+		negative_cols = [5,6,7,8,9,10]
+		(train_x,train_y) = read_file(train_datapath,True)
+		(test_x,test_y) = read_file(test_datapath,True)
+		(val_x,val_y) = read_file(validation_datapath,True)
+
+		train_x_new = ohe_func(train_x,categorical_features,num_categories,negative_cols)
+		test_x_new = ohe_func(test_x,categorical_features,num_categories,negative_cols)
+		val_x_new = ohe_func(val_x,categorical_features,num_categories,negative_cols)
+
+		criteria = "gini"
+		depth = 10
+		min_sample_leaf = 1
+		min_sample_split = 2
+		# dec_tree = tree.DecisionTreeClassifier(criterion=criteria,splitter="best",max_depth=depth,min_samples_split=min_sample_split,min_samples_leaf=min_sample_leaf)
+		dec_tree = tree.DecisionTreeClassifier(criterion=criteria)
+		dec_tree = dec_tree.fit(train_x_new,train_y)
+
+		print("Training Set")
+		predicted_train = np.array(dec_tree.predict(train_x_new),dtype=int)
+		confatrix_train = confusion_matrix(train_y,predicted_train)
+		print(confatrix_train)
+		print("Accuracy: " + str(accuracy_score(train_y,predicted_train)))
+
+		print("Test Set")
+		predicted_test = np.array(dec_tree.predict(test_x_new),dtype=int)
+		confatrix_test = confusion_matrix(test_y,predicted_test)
+		print(confatrix_test)
+		print("Accuracy: " + str(accuracy_score(test_y,predicted_test)))
+
+		print("Validation Set")
+		predicted_val = np.array(dec_tree.predict(val_x_new),dtype=int)
+		confatrix_val = confusion_matrix(val_y,predicted_val)
+		print(confatrix_val)
+		print("Accuracy: " + str(accuracy_score(val_y,predicted_val)))
+
+	elif part_num==6:
+		categorical_features = [1,2,3,5,6,7,8,9,10]
+		num_categories = [4,4,4,4,4,4,4,4,4]
+		negative_cols = [5,6,7,8,9,10]
+		(train_x,train_y) = read_file(train_datapath,True)
+		(test_x,test_y) = read_file(test_datapath,True)
+		(val_x,val_y) = read_file(validation_datapath,True)
+
+		train_x_new = ohe_func(train_x,categorical_features,num_categories,negative_cols)
+		test_x_new = ohe_func(test_x,categorical_features,num_categories,negative_cols)
+		val_x_new = ohe_func(val_x,categorical_features,num_categories,negative_cols)
+
+		num_estimators = 10
+		criteria = "entropy"
+		depth = 10
+		min_sample_leaf = 1
+		min_sample_split = 2
+		bs = True
+		# rf = RandomForestClassifier(n_estimators=num_estimators,criterion=criteria,max_depth=depth,min_samples_split=min_sample_split,min_samples_leaf=min_sample_leaf,bootstrap=bs)
+		rf = RandomForestClassifier(criterion=criteria)
+		rf.fit(train_x_new,np.ravel(train_y))
+
+		print("Training Set")
+		predicted_train = np.array(rf.predict(train_x_new),dtype=int)
+		confatrix_train = confusion_matrix(train_y,predicted_train)
+		print(confatrix_train)
+		print("Accuracy: " + str(accuracy_score(train_y,predicted_train)))
+
+		print("Test Set")
+		predicted_test = np.array(rf.predict(test_x_new),dtype=int)
+		confatrix_test = confusion_matrix(test_y,predicted_test)
+		print(confatrix_test)
+		print("Accuracy: " + str(accuracy_score(test_y,predicted_test)))
+
+		print("Validation Set")
+		predicted_val = np.array(rf.predict(val_x_new),dtype=int)
+		confatrix_val = confusion_matrix(val_y,predicted_val)
+		print(confatrix_val)
+		print("Accuracy: " + str(accuracy_score(val_y,predicted_val)))
+
+	else:
+		print("Invalid part")
+
 
 if __name__ == "__main__":
 	main()

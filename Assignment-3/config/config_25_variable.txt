@@ -1,0 +1,7 @@
+85
+10
+25
+1
+25
+sigmoid
+variable

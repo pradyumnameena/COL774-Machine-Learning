@@ -1,46 +1,21 @@
 import sys
 import csv
+import time
 import random
 import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
-from sklearn.neural_network import MLPClassifier
 import matplotlib.pyplot as plt
 
-def generate_ohe(data_x,name):
-	new_data = np.asmatrix(np.zeros((data_x.shape[0],85),dtype=int))
-	for i in range(len(data_x)):
-		for j in range(data_x.shape[1]/2):
-			new_data[i,17*j + data_x[i,2*j]-1] = 1
-			new_data[i,17*j + 4 + data_x[i,2*j+1]-1] = 1
-	pd.DataFrame(np.array(new_data)).to_csv(name,header=None,index=None)
-
-def scikit_nn(train_x,train_y,test_x,test_y,arch_details,num_iters,batchsize,activation,learning_rate):
-	clf = MLPClassifier(alpha=0,shuffle=True,tol=0,warm_start=False,verbose=True,momentum=0,
-		early_stopping=False,solver='sgd',hidden_layer_sizes=arch_details, random_state=1,
-		activation=activation,max_iter=num_iters,batch_size=batchsize,learning_rate_init=learning_rate,learning_rate='constant')
-	# clf = MLPClassifier(solver='sgd', alpha=1e-5,random_state=1,activation='relu')
-	clf.fit(train_x,modify_output(train_y,10))
-	predict = clf.predict(test_x)
-	output = np.asmatrix(np.zeros((len(test_y),1)),dtype=int)
-	for i in range(len(predict)):
-		for j in range(10):
-			if predict[i,j]==1:
-				output[i,0] = j
-	print(confusion_matrix(test_y,output))
-	print(accuracy_score(test_y,output))
-	# print(clf.coefs_)
-	print(clf.get_params())
-
-def read_file(datapath):
+def read_fileV2(datapath,distance):
 	full_data = pd.read_csv(datapath,header=None,dtype=int)
-	data_shape = full_data.shape
 	full_data_arr = np.array(full_data)
-	x = np.asmatrix(full_data_arr[:,0:data_shape[1]-1])
-	y = np.asmatrix(full_data_arr[:,data_shape[1]-1:data_shape[1]])
+	full_data_shape = full_data.shape
+	x = np.asmatrix(full_data_arr[:,0:full_data_shape[1]-distance])
+	y = np.asmatrix(full_data_arr[:,full_data_shape[1]-distance:full_data_shape[1]])
 	return (x,y)
-	
+
 def sigmoid_activation(a):
 	return 1/(1+np.exp(-1*a))
 	
@@ -50,34 +25,20 @@ def sigmoid_derivative(a):
 def relu_activation(a):
 	return np.multiply(a>0,a)
 
-def relu_RHS_derivative(a):
+def relu_derivative(a):
 	return np.multiply(a>=0,np.ones(a.shape,dtype=float))
-
-def relu_LHS_derivative(a):
-	return np.multiply(a>0,np.ones(a.shape,dtype=float))
-
-def normalize_data_x(data_x):
-	data_x = np.subtract(data_x,np.mean(data_x,axis=0))
-	data_x = np.divide(data_x,np.var(data_x,axis=0))
-	return data_x
-
-def modify_output(data_y,num_classes):
-	output_mat = np.asmatrix(np.zeros((len(data_y),num_classes),dtype=int))
-	for i in range(len(data_y)):
-		output_mat[i,data_y[i,0]]=1
-	return output_mat
 	
 def initialize_params(arch_details):
 	np.random.seed(1)
 	params = {}
 	for l in range(1,len(arch_details)):
-		params["W"+str(l)] = np.random.randn(arch_details[l],arch_details[l-1])*0.01
+		params["W"+str(l)] = np.random.randn(arch_details[l],arch_details[l-1])
 		params["b"+str(l)] = np.zeros((arch_details[l],1),dtype=float)
 	return params
 	
 def forward_prop(params,data_x,activation):
 	forward_pass = {}
-	num_layers = len(params)/2
+	num_layers = (int)(len(params)/2)
 	x = np.transpose(data_x)
 	forward_pass["a0"] = x
 
@@ -102,30 +63,29 @@ def forward_prop(params,data_x,activation):
 
 def loss_function(output_layer_output,actual_output):
 	loss = np.multiply(output_layer_output-actual_output,output_layer_output-actual_output)
-	return (-1*np.mean(loss,axis=1)/(output_layer_output.shape[1]))
+	return np.mean(loss,axis=1)
 	
 def backward_prop(params,forward_pass,learning_rate,y_data,activation):
 	der_dict = {}
 	new_params = {}
 	m = y_data.shape[1]
-	der_output = np.multiply(forward_pass["a"+str(len(params)/2)] - y_data,sigmoid_derivative(forward_pass["z"+str(len(params)/2)]))
-	# der_output = forward_pass["a"+str(len(params)/2)] - y_data
-	der_dict["dZ"+str(len(params)/2)] = der_output
+	der_output = np.multiply(forward_pass["a"+str((int)(len(params)/2))] - y_data,sigmoid_derivative(forward_pass["z"+str((int)(len(params)/2))]))
+	der_dict["dZ"+str((int)(len(params)/2))] = der_output
 	
 	if activation=="logistic":
-		for i in xrange(len(params)/2 - 1,0,-1):
+		for i in range((int)(len(params)/2) - 1,0,-1):
 			der_output = np.multiply(np.dot(np.transpose(params["W"+str(i+1)]),der_dict["dZ"+str(i+1)]),sigmoid_derivative(forward_pass["z"+str(i)]))
 			der_dict["dZ"+str(i)] = der_output
 
-		for i in range(1,len(params)/2 +1):
+		for i in range(1,(int)(len(params)/2) +1):
 			new_params["W"+str(i)] = params["W"+str(i)] - (learning_rate/m)*np.dot(der_dict["dZ"+str(i)],np.transpose(forward_pass["a"+str(i-1)]))
 			new_params["b"+str(i)] = params["b"+str(i)] - (learning_rate/m)*np.sum(der_dict["dZ"+str(i)],axis=1)
 	else:
-		for i in xrange(len(params)/2 - 1,0,-1):
-			der_output = np.multiply(np.dot(np.transpose(params["W"+str(i+1)]),der_dict["dZ"+str(i+1)]),relu_RHS_derivative(forward_pass["z"+str(i)]))
+		for i in range((int)(len(params)/2) - 1,0,-1):
+			der_output = np.multiply(np.dot(np.transpose(params["W"+str(i+1)]),der_dict["dZ"+str(i+1)]),relu_derivative(forward_pass["z"+str(i)]))
 			der_dict["dZ"+str(i)] = der_output
 
-		for i in range(1,len(params)/2 +1):
+		for i in range(1,(int)(len(params)/2) +1):
 			new_params["W"+str(i)] = params["W"+str(i)] - (learning_rate/m)*np.dot(der_dict["dZ"+str(i)],np.transpose(forward_pass["a"+str(i-1)]))
 			new_params["b"+str(i)] = params["b"+str(i)] - (learning_rate/m)*np.sum(der_dict["dZ"+str(i)],axis=1)
 	return new_params
@@ -133,78 +93,99 @@ def backward_prop(params,forward_pass,learning_rate,y_data,activation):
 def prediction(params,data_x,activation):
 	forward_pass = {}
 	x = np.transpose(data_x)
-	for i in range(len(params)/2):
+	for i in range((int)(len(params)/2)):
 		x = np.dot(params["W"+str(i+1)],x) + params["b"+str(i+1)]
 		forward_pass["z"+str(i+1)] = x
 		x = sigmoid_activation(x)
 		forward_pass["a"+str(i+1)] = x
-	output = np.exp(forward_pass["a"+str(len(params)/2)])
+	output = np.exp(forward_pass["a"+str((int)(len(params)/2))])
 	summer = np.sum(output,axis=0)
 	output = np.divide(output,summer)
 	return np.argmax(output,axis=0)
 
-def main():
-	train_datapath = "dataset/neural_net/poker-hand-training-true.data"
-	# test_datapath = "dataset/neural_net/poker-hand-testing.data"
-	test_datapath = "dataset/neural_net/poker-hand-training-true.data"
-
-	# train_datapath = "../Assignment_2/mnist/train.csv"
-	# test_datapath = "../Assignment_2/mnist/test.csv"
-	
-	(train_x,train_y) = read_file(train_datapath)
-	(test_x,test_y) = read_file(test_datapath)
-	# train_x = normalize_data_x(train_x)
-	# test_x = normalize_data_x(test_x)
-	
-	# generate_ohe(train_x,"train_x.csv")
-	# generate_ohe(test_x,"test_x.csv")
-
-	train_x = np.asmatrix(pd.read_csv("train_x.csv",header=None,dtype=int))
-	# test_x = np.asmatrix(pd.read_csv("test_x.csv",header=None,dtype=int))
-	test_x = np.asmatrix(pd.read_csv("train_x.csv",header=None,dtype=int))
-
-	learning_rate = 0.001
-	architecture_details = [25]
-	num_outputs = 10
-	epochs = 3000
-	batch_size = 25
-	num_datapoints = len(train_x)
-	modified_y = modify_output(train_y,num_outputs)
-	error = 10
-	epsilon = 1e-3
-	
-	neurons_list = [train_x.shape[1]]
-	neurons_list.extend(architecture_details)
-	neurons_list.append(num_outputs)
-	activation = "logistic"
-	# activation = "relu"
-	params = initialize_params(neurons_list)
-	# scikit_nn(train_x,train_y,test_x,test_y,architecture_details,epochs,batch_size,activation,learning_rate)
-	cost_list = []
-	counter = 0
-	
-	while error>epsilon and counter<epochs:
-		train_x = np.random.permutation(train_x)
-		for batch_counter in range(num_datapoints/batch_size):
-			begin = batch_counter*batch_size
-			end = begin+batch_size
-			if batch_counter==(num_datapoints/batch_size)-1:
-				end = num_datapoints
-			forward_pass  = forward_prop(params,train_x[begin:end,:],activation)
-			loss_mag = loss_function(forward_pass["a"+str(len(params)/2)],np.transpose(modified_y[begin:end,:]))
-			params = backward_prop(params,forward_pass,learning_rate,np.transpose(modified_y[begin:end,:]),activation)
-		error = np.sqrt(np.dot(loss_mag,np.transpose(loss_mag))[0,0])
-		print(str(counter) + " : " + str(error))
-		cost_list.append(error)
-		counter+=1
-	
-	predicted = np.transpose(prediction(params,test_x,activation))
-	confatrix = confusion_matrix(test_y,predicted)
-	print(confatrix)
-	print(accuracy_score(test_y,predicted))
-	plt.plot(cost_list)
+def draw_confusion_matrix(confatrix):
+	plt.imshow(confatrix)
+	plt.title("Confusion Matrix")
+	plt.colorbar()
+	plt.set_cmap("Greens")
+	plt.ylabel("True labels")
+	plt.xlabel("Predicted label")
 	plt.show()
 
+def main():
+	config_datapath = sys.argv[1]
+	train_datapath = sys.argv[2]
+	test_datapath = sys.argv[3]
+
+	config = open(config_datapath,'r')
+	num_input = (int)(config.readline())
+	num_outputs = (int)(config.readline())
+	batch_size = (int)(config.readline())
+	num_hidden_layers = (int)(config.readline())
+	hidden_layers = [(int)(x) for x in config.readline()[:-1].split(' ')]
+	activation = (config.readline()[:-1])
+	learning_rate_variation = config.readline()
+	config.close()
+	if activation == "sigmoid": activation = "logistic"
+
+	(train_x,train_y) = read_fileV2(train_datapath,num_outputs)
+	(test_x,test_y) = read_fileV2(test_datapath,num_outputs)
+
+	counter = 0
+	epochs = 1000
+	epsilon = 0.0001
+	tolerance = 0.0001
+	cost_list = []
+	learning_rate = 0.1
+	error_old = 0
+	error_new = 10
+	num_datapoints = len(train_x)
+	num_batches = (int)(num_datapoints/batch_size)
+	neurons_list = [num_input]
+	neurons_list.extend(hidden_layers)
+	neurons_list.append(num_outputs)
+	params = initialize_params(neurons_list)
+	
+	# scikit_nn(train_x,train_y,test_x,test_y,hidden_layers,epochs,batch_size,activation,learning_rate)
+	time1 = time.clock()
+	
+	while error_new>epsilon and counter<epochs and learning_rate>1e-5:
+		for batch_counter in range(num_batches):
+			begin = batch_counter*batch_size
+			end = begin+batch_size
+			if batch_counter==num_batches-1:
+				end = num_datapoints
+			forward_pass  = forward_prop(params,train_x[begin:end,:],activation)
+			loss_mag = loss_function(forward_pass["a"+str((int)(len(params)/2))],np.transpose(train_y[begin:end,:]))
+			params = backward_prop(params,forward_pass,learning_rate,np.transpose(train_y[begin:end,:]),activation)
+		error_new = np.dot(loss_mag,np.transpose(loss_mag))[0,0]/2
+		error_old = error_new
+		# print(str(counter) + " : " + str(error_new))
+		cost_list.append(error_new)
+		if learning_rate_variation=="variable" and len(cost_list)>=3:
+			if cost_list[len(cost_list)-2] - cost_list[len(cost_list)-1]<tolerance and cost_list[len(cost_list)-3] - cost_list[len(cost_list)-2]<tolerance:
+				learning_rate = learning_rate/5
+				print(learning_rate)
+		counter+=1
+	time2 = time.clock()
+	print(str(time2-time1) + " taken for training")
+	
+	print("PREDICTION ON TRAINING DATA")
+	predicted_train = np.transpose(prediction(params,train_x,activation))
+	confatrix_train = confusion_matrix(np.argmax(train_y,axis=1),predicted_train)
+	print(confatrix_train)
+	# draw_confusion_matrix(confatrix_train)
+	print(accuracy_score(np.argmax(train_y,axis=1),predicted_train))
+
+	print("PREDICTION ON TESTING DATA")
+	predicted_test = np.transpose(prediction(params,test_x,activation))
+	confatrix_test = confusion_matrix(np.argmax(test_y,axis=1),predicted_test)
+	print(confatrix_test)
+	# draw_confusion_matrix(confatrix_test)
+	print(accuracy_score(np.argmax(test_y,axis=1),predicted_test))
+
+	# plt.plot(cost_list)
+	# plt.show()
 	
 if __name__ == "__main__":
 	main()
