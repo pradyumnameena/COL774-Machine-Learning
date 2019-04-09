@@ -1,7 +1,7 @@
 85
 10
+100
+1
 25
-2
-15 15
 sigmoid
 variable

@@ -1,10 +1,12 @@
 import sys
+import collections
 import numpy as np
 import pandas as pd
 from sklearn import tree
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
 
 class tree_Node:
 	def __init__(self,datapoints_indices,parent,val=-1,childs = [],num_nodes=1,feature_index=-1,answer=0):
@@ -124,7 +126,26 @@ def predict(tree,test_x):
 		predicted[j,0] = get_class(tree,np.ravel(test_x[j,:]))
 	return predicted
 
-def grow_tree(train_x,train_y,datapoints_indices,parent=None):
+def breadth_first_traversal(tree):
+	node_list = []
+	visited_list = [tree]
+	while len(visited_list)!=0:
+		vertex = visited_list.pop(0)
+		node_list.append(vertex)
+		for child in vertex.childs:
+			visited_list.append(child)
+	return node_list
+
+def get_node_count(tree):
+	if tree.feature_index==-1:
+		return 1
+	else:
+		rv = 0
+		for child in tree.childs:
+			rv+= get_node_count(child)
+		return rv+1
+
+def grow_tree(train_x,train_y,datapoints_indices,parent=None,modified=False):
 	new_list = np.ravel(train_y[datapoints_indices])
 	
 	# PURE LEAF NODE || NO BEST FEATURE AVAILABLE
@@ -202,11 +223,57 @@ def main():
 		
 		my_tree = grow_tree(train_x_new,train_y,datapoints_indices)
 		
-		# DO PRUNING HERE
+		node_list = breadth_first_traversal(my_tree)
+		train_accuracy = {}
+		validation_accuracy = {}
+		test_accuracy = {}
+		node_count_dict = {}
+
+		train_accuracy[0] = accuracy_score(train_y,predict(my_tree,train_x_new))
+		validation_accuracy[0] = accuracy_score(val_y,predict(my_tree,validation_x_new))
+		test_accuracy[0] = accuracy_score(test_y,predict(my_tree,test_x_new))
+		node_count_dict[0] = get_node_count(my_tree)
+
+		iter_num = 0
+		best_accuracy = -1
+
+		while True:
+			acc_prev = accuracy_score(val_y,predict(my_tree,validation_x_new))
+			acc_after = 0
+			best_node = tree
+			iter_num+=1
+			node_list.reverse()
+			counter = 0
+			# print("Iteration -> " + str(iter_num))
+			for node in node_list:
+				# print(counter)
+				if node.feature_index!=-1:
+					node_childs = node.childs
+					node_feature = node.feature_index
+					node.childs = []
+					node.feature_index = -1
+					acc_after = accuracy_score(val_y,predict(my_tree,validation_x_new))
+					if acc_after>best_accuracy:
+						# print(acc_after)
+						best_accuracy = acc_after
+						best_node = node
+					node.feature_index = node_feature
+					node.childs = node_childs
+				counter+=1
+			if best_accuracy>acc_prev:
+				best_node.childs = []
+				best_node.feature_index = -1
+				node_count = get_node_count(my_tree)
+				node_count_dict[iter_num] = node_count
+				train_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new))
+				test_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new))
+				validation_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new))
+				node_list = breadth_first_traversal(my_tree)
+			else:
+				break
 
 		# print_tree(tree)
-		print("Total Nodes = " + str(my_tree.num_nodes))
-
+		print("Total Nodes -> " + str(get_node_count(my_tree)))
 		print("Training Data")
 		predicted = predict(my_tree,train_x_new)
 		print(confusion_matrix(train_y,predicted))
@@ -222,8 +289,50 @@ def main():
 		print(confusion_matrix(val_y,predicted))
 		print(accuracy_score(val_y,predicted))
 
+		fig = plt.figure()
+		plt.title("Accuracies vs Number of Nodes")
+		plt.plot(node_count_dict.values(), test_accuracy.values(), label = 'Testing')
+		plt.plot(node_count_dict.values(), validation_accuracy.values(), label = 'Validation')
+		plt.plot(node_count_dict.values(), train_accuracy.values(), label = 'Training')
+		plt.xlabel("Number of Nodes")
+		plt.ylabel('Accuracies')
+		plt.legend()
+		# plt.show()
+		fig.savefig("Accuracy_with_Nodes"+'.png')
+
 	elif part_num==3:
-		print(part_num)
+		(train_x,train_y) = read_file(train_datapath,False)
+		(test_x,test_y) = read_file(test_datapath,False)
+		(val_x,val_y) = read_file(validation_datapath,False)
+		
+		non_continuous_columns = [1,2,3,5,6,7,8,9,10]
+		negative_cols = [5,6,7,8,9,10]
+		train_x_new = pre_processing(train_x,non_continuous_columns,negative_cols)
+		test_x_new = pre_processing(test_x,non_continuous_columns,negative_cols)
+		validation_x_new = pre_processing(val_x,non_continuous_columns,negative_cols)
+
+		datapoints_indices = []
+		for i in range(train_x.shape[0]):
+			datapoints_indices.append(i)
+		
+		my_tree = grow_tree(train_x_new,train_y,datapoints_indices,modified=True)
+		# print_tree(tree)
+		print("Total Nodes = " + str(get_node_count(my_tree)))
+
+		print("Training Data")
+		predicted = predict(my_tree,train_x_new)
+		print(confusion_matrix(train_y,predicted))
+		print(accuracy_score(train_y,predicted))
+
+		print("Testing Data")
+		predicted = predict(my_tree,test_x_new)
+		print(confusion_matrix(test_y,predicted))
+		print(accuracy_score(test_y,predicted))
+
+		print("Validation Data")
+		predicted = predict(my_tree,validation_x_new)
+		print(confusion_matrix(val_y,predicted))
+		print(accuracy_score(val_y,predicted))
 
 	elif part_num==4:
 		(train_x,train_y) = read_file(train_datapath,True)
@@ -338,7 +447,6 @@ def main():
 
 	else:
 		print("Invalid part")
-
 
 if __name__ == "__main__":
 	main()
