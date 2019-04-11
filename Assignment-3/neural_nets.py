@@ -35,10 +35,10 @@ def leaky_relu_derivative(a):
 	return np.add(np.multiply(1,a>0),np.multiply(0.01,a<=0))
 
 def normalization(mat):
+	mean = np.mean(mat,axis=0)
 	var = np.var(mat,axis=0)
 	var = var + np.multiply(1,var==0)
-	# print(var)
-	return np.divide(mat,var)
+	return np.divide(np.subtract(mat,mean),var)
 	
 def initialize_params(arch_details):
 	np.random.seed(1)
@@ -165,11 +165,14 @@ def main():
 		activation = "logistic"
 		epochs = 1000
 	else:
-		epochs = 3000
+		epochs = 1000
 
 	(train_x,train_y) = read_fileV2(train_datapath,num_outputs)
 	(test_x,test_y) = read_fileV2(test_datapath,num_outputs)
 
+	# train_x = normalization(train_x)
+	# test_x = normalization(test_x)
+	# print(test_x.shape)
 	counter = 0
 	epsilon = 0.000001
 	tolerance = 0.0001
@@ -215,14 +218,14 @@ def main():
 	print("PREDICTION ON TRAINING DATA")
 	predicted_train = np.transpose(prediction(params,train_x,activation))
 	confatrix_train = confusion_matrix(np.argmax(train_y,axis=1),predicted_train)
-	# print(confatrix_train)
-	# draw_confusion_matrix(confatrix_train)
+	print(confatrix_train)
+	draw_confusion_matrix(confatrix_train)
 	print(accuracy_score(np.argmax(train_y,axis=1),predicted_train))
 
 	print("PREDICTION ON TESTING DATA")
 	predicted_test = np.transpose(prediction(params,test_x,activation))
 	confatrix_test = confusion_matrix(np.argmax(test_y,axis=1),predicted_test)
-	# print(confatrix_test)
+	print(confatrix_test)
 	# draw_confusion_matrix(confatrix_test)
 	print(accuracy_score(np.argmax(test_y,axis=1),predicted_test))
 

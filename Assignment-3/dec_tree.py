@@ -8,8 +8,10 @@ from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 
+continuous_columns_global = [0,4,11,12,13,14,15,16,17,18,19,20,21,22]
+
 class tree_Node:
-	def __init__(self,datapoints_indices,parent,val=-1,childs = [],num_nodes=1,feature_index=-1,answer=0):
+	def __init__(self,datapoints_indices,parent,median=0,val=-1,childs = [],num_nodes=1,feature_index=-1,answer=0):
 		self.indices = datapoints_indices
 		self.childs = childs
 		self.parent = parent
@@ -17,6 +19,7 @@ class tree_Node:
 		self.feature_index = feature_index
 		self.num_nodes = num_nodes
 		self.answer = answer
+		self.median = median
 
 def read_file(datapath,array_form):
 	full_data = pd.read_csv(datapath)
@@ -48,41 +51,43 @@ def pre_processing(mat,non_continuous_columns,negative_cols):
 		new_data[:,i]+=2
 	return new_data
 
+def pre_processingV2(mat,negative_cols):
+	for i in negative_cols:
+		mat[:,i]+=2
+	return mat
+
 def my_entropy(datapoints_indices,data_y):
 	new_list = np.ravel(data_y[datapoints_indices])
 	bin_count = np.divide(np.bincount(new_list),1.0*len(datapoints_indices))
 	bin_count = np.add(bin_count,np.multiply(np.ones(bin_count.shape,dtype=int),bin_count==0))
 	return -1*np.sum(np.multiply(bin_count,np.divide(np.log(bin_count),np.log(2))))
 
-def split_parent_correct(feature_index,datapoints_indices,data_x):
-	new_data = data_x[datapoints_indices,:]
-	dicti = {}
-	for i in datapoints_indices:
-		for a in np.unique(np.ravel(new_data[:,feature_index])):
-			if data_x[i,feature_index]==a:
-				if a  not in dicti:
-					dicti[a] = []
-				dicti[a].append(i)
-	return dicti
-
 def split_parent(feature_index,datapoints_indices,data_x):
 	new_data2 = data_x[datapoints_indices,:][:,feature_index]
 	dicti = {c: [datapoints_indices[x] for x in np.where(new_data2==c)[0]] for c in np.unique(np.ravel(new_data2))}
 	return dicti
 	
-def info_gain(feature_index,datapoints_indices,data_x,data_y):
-	dicti = split_parent(feature_index,datapoints_indices,data_x)
+def info_gain(feature_index,datapoints_indices,data_x,data_y,modified):
+	# change for part c
+	dicti = {}
+	if modified==True and feature_index in continuous_columns_global:
+		curr_data = data_x[datapoints_indices,:][:,feature_index]
+		median = np.median(curr_data,axis=0)[0,0]
+		data_modified = np.multiply(np.asmatrix(np.ones(curr_data.shape,dtype=int)),curr_data>median)
+		dicti = {c: [datapoints_indices[x] for x in np.where(data_modified==c)[0]] for c in np.unique(np.ravel(data_modified))}
+	else:
+		dicti = split_parent(feature_index,datapoints_indices,data_x)
 	ig = 0.0
 	for prob in dicti.keys():
 		ig -= (np.divide(1.0*len(dicti[prob]),len(datapoints_indices)) * my_entropy(dicti[prob],data_y))
 	return ig
 
-def best_feature(datapoints_indices,data_x,data_y):
+def best_feature(datapoints_indices,data_x,data_y,modified):
 	max_gain = -1
 	best_feature = -1
 	parent_entropy = my_entropy(datapoints_indices,data_y)
 	for i in range(data_x.shape[1]):
-		ig = parent_entropy + info_gain(i,datapoints_indices,data_x,data_y)
+		ig = parent_entropy + info_gain(i,datapoints_indices,data_x,data_y,modified)
 		if ig>max_gain:
 			max_gain = ig
 			best_feature = i
@@ -92,7 +97,6 @@ def print_tree(tree):
 	if tree.parent==None:
 		print("Root Node. Feature Used -> " + str(tree.feature_index))
 		new_list = []
-		print(len(tree.childs))
 		for c in tree.childs:
 			new_list.append(c.value)
 		print("Child Values -> " + str(new_list))
@@ -111,19 +115,25 @@ def print_tree(tree):
 		for c in tree.childs:
 			print_tree(c)
 
-def get_class(tree,data_point):
+def get_class(tree,data_point,modified):
 	if tree.feature_index==-1:
 		return tree.answer
 	else:
-		for i in range(len(tree.childs)):
-			if data_point[tree.feature_index]==tree.childs[i].value:
-				return get_class(tree.childs[i],data_point)
+		if modified==False or (tree.feature_index not in continuous_columns_global):
+			for i in range(len(tree.childs)):
+				if data_point[tree.feature_index]==tree.childs[i].value:
+					return get_class(tree.childs[i],data_point,modified)
+		else:
+			val = (data_point[tree.feature_index]>tree.median).astype(int)
+			for i in range(len(tree.childs)):
+				if tree.childs[i].value==val:
+					return get_class(tree.childs[i],data_point,modified)
 		return tree.answer
 
-def predict(tree,test_x):
+def predict(tree,test_x,modified):
 	predicted = np.asmatrix(np.zeros((test_x.shape[0],1),dtype=int))
 	for j in range(test_x.shape[0]):
-		predicted[j,0] = get_class(tree,np.ravel(test_x[j,:]))
+		predicted[j,0] = get_class(tree,np.ravel(test_x[j,:]),modified)
 	return predicted
 
 def breadth_first_traversal(tree):
@@ -145,22 +155,51 @@ def get_node_count(tree):
 			rv+= get_node_count(child)
 		return rv+1
 
-def grow_tree(train_x,train_y,datapoints_indices,parent=None,modified=False):
+def grow_tree(train_x,train_y,datapoints_indices,parent=None):
 	new_list = np.ravel(train_y[datapoints_indices])
 	
 	# PURE LEAF NODE || NO BEST FEATURE AVAILABLE
 	if len(set(new_list)) <= 1:
 		return tree_Node(datapoints_indices,parent,answer=np.argmax(np.bincount(new_list)),feature_index=-1)
 
-	bf, max_gain = best_feature(datapoints_indices,train_x,train_y)
+	bf, max_gain = best_feature(datapoints_indices,train_x,train_y,False)
 	if max_gain >= 0:
 		dicti = split_parent(bf,datapoints_indices,train_x)
-		node = tree_Node(datapoints_indices,parent,-1,[],feature_index=bf,answer=np.argmax(np.bincount(new_list)))
+		node = tree_Node(datapoints_indices,parent,0,-1,[],1,feature_index=bf,answer=np.argmax(np.bincount(new_list)))
 
 		if len(dicti)==1:
 			return node
 		for val in dicti.keys():
 			child = grow_tree(train_x,train_y,dicti[val],parent=node)
+			child.value = val
+			node.childs.append(child)
+			node.num_nodes+=child.num_nodes
+		return node
+
+def grow_treeV2(train_x,train_y,datapoints_indices,parent=None):
+	new_list = np.ravel(train_y[datapoints_indices])
+	
+	# PURE LEAF NODE || NO BEST FEATURE AVAILABLE
+	if len(set(new_list)) <= 1:
+		return tree_Node(datapoints_indices,parent,answer=np.argmax(np.bincount(new_list)),feature_index=-1)
+
+	bf, max_gain = best_feature(datapoints_indices,train_x,train_y,True)
+	
+	if max_gain >= 0:
+		dicti = {}
+		node = tree_Node(datapoints_indices,parent,0,-1,[],1,feature_index=bf,answer=np.argmax(np.bincount(new_list)))
+		if bf in continuous_columns_global:
+			new_data2 = (train_x[datapoints_indices,:][:,bf])
+			median = np.median(new_data2,axis=0)[0,0]
+			new_data2 = np.multiply(np.asmatrix(np.ones(new_data2.shape,dtype=int)),new_data2>median)
+			dicti = {c: [datapoints_indices[x] for x in np.where(new_data2==c)[0]] for c in np.unique(np.ravel(new_data2))}
+			node.median = median
+		else:
+			dicti = split_parent(bf,datapoints_indices,train_x)
+		if len(dicti)==1:
+			return node
+		for val in dicti.keys():
+			child = grow_treeV2(train_x,train_y,dicti[val],parent=node)
 			child.value = val
 			node.childs.append(child)
 			node.num_nodes+=child.num_nodes
@@ -189,20 +228,20 @@ def main():
 		
 		my_tree = grow_tree(train_x_new,train_y,datapoints_indices)
 		# print_tree(tree)
-		print("Total Nodes = " + str(my_tree.num_nodes))
-
+		print("Total Nodes -> " + str(get_node_count(my_tree)))
+		modified = False
 		print("Training Data")
-		predicted = predict(my_tree,train_x_new)
+		predicted = predict(my_tree,train_x_new,modified)
 		print(confusion_matrix(train_y,predicted))
 		print(accuracy_score(train_y,predicted))
 
 		print("Testing Data")
-		predicted = predict(my_tree,test_x_new)
+		predicted = predict(my_tree,test_x_new,modified)
 		print(confusion_matrix(test_y,predicted))
 		print(accuracy_score(test_y,predicted))
 
 		print("Validation Data")
-		predicted = predict(my_tree,validation_x_new)
+		predicted = predict(my_tree,validation_x_new,modified)
 		print(confusion_matrix(val_y,predicted))
 		print(accuracy_score(val_y,predicted))
 	
@@ -229,16 +268,17 @@ def main():
 		test_accuracy = {}
 		node_count_dict = {}
 
-		train_accuracy[0] = accuracy_score(train_y,predict(my_tree,train_x_new))
-		validation_accuracy[0] = accuracy_score(val_y,predict(my_tree,validation_x_new))
-		test_accuracy[0] = accuracy_score(test_y,predict(my_tree,test_x_new))
+		modified = False
+		train_accuracy[0] = accuracy_score(train_y,predict(my_tree,train_x_new,modified))
+		validation_accuracy[0] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
+		test_accuracy[0] = accuracy_score(test_y,predict(my_tree,test_x_new,modified))
 		node_count_dict[0] = get_node_count(my_tree)
 
 		iter_num = 0
 		best_accuracy = -1
 
 		while True:
-			acc_prev = accuracy_score(val_y,predict(my_tree,validation_x_new))
+			acc_prev = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
 			acc_after = 0
 			best_node = tree
 			iter_num+=1
@@ -252,7 +292,7 @@ def main():
 					node_feature = node.feature_index
 					node.childs = []
 					node.feature_index = -1
-					acc_after = accuracy_score(val_y,predict(my_tree,validation_x_new))
+					acc_after = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
 					if acc_after>best_accuracy:
 						# print(acc_after)
 						best_accuracy = acc_after
@@ -265,9 +305,9 @@ def main():
 				best_node.feature_index = -1
 				node_count = get_node_count(my_tree)
 				node_count_dict[iter_num] = node_count
-				train_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new))
-				test_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new))
-				validation_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new))
+				train_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
+				test_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
+				validation_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
 				node_list = breadth_first_traversal(my_tree)
 			else:
 				break
@@ -275,17 +315,17 @@ def main():
 		# print_tree(tree)
 		print("Total Nodes -> " + str(get_node_count(my_tree)))
 		print("Training Data")
-		predicted = predict(my_tree,train_x_new)
+		predicted = predict(my_tree,train_x_new,modified)
 		print(confusion_matrix(train_y,predicted))
 		print(accuracy_score(train_y,predicted))
 
 		print("Testing Data")
-		predicted = predict(my_tree,test_x_new)
+		predicted = predict(my_tree,test_x_new,modified)
 		print(confusion_matrix(test_y,predicted))
 		print(accuracy_score(test_y,predicted))
 
 		print("Validation Data")
-		predicted = predict(my_tree,validation_x_new)
+		predicted = predict(my_tree,validation_x_new,modified)
 		print(confusion_matrix(val_y,predicted))
 		print(accuracy_score(val_y,predicted))
 
@@ -305,32 +345,32 @@ def main():
 		(test_x,test_y) = read_file(test_datapath,False)
 		(val_x,val_y) = read_file(validation_datapath,False)
 		
-		non_continuous_columns = [1,2,3,5,6,7,8,9,10]
 		negative_cols = [5,6,7,8,9,10]
-		train_x_new = pre_processing(train_x,non_continuous_columns,negative_cols)
-		test_x_new = pre_processing(test_x,non_continuous_columns,negative_cols)
-		validation_x_new = pre_processing(val_x,non_continuous_columns,negative_cols)
+		train_x_new = pre_processingV2(train_x,negative_cols)
+		test_x_new = pre_processingV2(test_x,negative_cols)
+		validation_x_new = pre_processingV2(val_x,negative_cols)
 
 		datapoints_indices = []
 		for i in range(train_x.shape[0]):
 			datapoints_indices.append(i)
 		
-		my_tree = grow_tree(train_x_new,train_y,datapoints_indices,modified=True)
-		# print_tree(tree)
+		my_tree = grow_treeV2(train_x_new,train_y,datapoints_indices)
 		print("Total Nodes = " + str(get_node_count(my_tree)))
+		# print_tree(my_tree)
 
+		modified = True
 		print("Training Data")
-		predicted = predict(my_tree,train_x_new)
+		predicted = predict(my_tree,train_x_new,modified)
 		print(confusion_matrix(train_y,predicted))
 		print(accuracy_score(train_y,predicted))
 
 		print("Testing Data")
-		predicted = predict(my_tree,test_x_new)
+		predicted = predict(my_tree,test_x_new,modified)
 		print(confusion_matrix(test_y,predicted))
 		print(accuracy_score(test_y,predicted))
 
 		print("Validation Data")
-		predicted = predict(my_tree,validation_x_new)
+		predicted = predict(my_tree,validation_x_new,modified)
 		print(confusion_matrix(val_y,predicted))
 		print(accuracy_score(val_y,predicted))
 
