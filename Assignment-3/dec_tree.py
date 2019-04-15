@@ -10,6 +10,10 @@ import matplotlib.pyplot as plt
 
 continuous_columns_global = [0,4,11,12,13,14,15,16,17,18,19,20,21,22]
 
+part1_train_accuracy = {}
+part1_test_accuracy = {}
+part1_val_accuracy = {}
+
 class tree_Node:
 	def __init__(self,datapoints_indices,parent,median=0,val=-1,childs = [],num_nodes=1,feature_index=-1,answer=0):
 		self.indices = datapoints_indices
@@ -115,25 +119,25 @@ def print_tree(tree):
 		for c in tree.childs:
 			print_tree(c)
 
-def get_class(tree,data_point,modified):
-	if tree.feature_index==-1:
+def get_class(tree,data_point,current_depth,allowed_depth,modified,max_depth):
+	if tree.feature_index==-1 or current_depth==allowed_depth or current_depth==max_depth:
 		return tree.answer
 	else:
 		if modified==False or (tree.feature_index not in continuous_columns_global):
 			for i in range(len(tree.childs)):
 				if data_point[tree.feature_index]==tree.childs[i].value:
-					return get_class(tree.childs[i],data_point,modified)
+					return get_class(tree.childs[i],data_point,current_depth+1,allowed_depth,modified,max_depth)
 		else:
 			val = (data_point[tree.feature_index]>tree.median).astype(int)
 			for i in range(len(tree.childs)):
 				if tree.childs[i].value==val:
-					return get_class(tree.childs[i],data_point,modified)
+					return get_class(tree.childs[i],data_point,current_depth+1,allowed_depth,modified,max_depth)
 		return tree.answer
 
-def predict(tree,test_x,modified):
+def predict(tree,test_x,modified,allowed_depth,max_depth):
 	predicted = np.asmatrix(np.zeros((test_x.shape[0],1),dtype=int))
 	for j in range(test_x.shape[0]):
-		predicted[j,0] = get_class(tree,np.ravel(test_x[j,:]),modified)
+		predicted[j,0] = get_class(tree,np.ravel(test_x[j,:]),0,allowed_depth,modified,max_depth)
 	return predicted
 
 def breadth_first_traversal(tree):
@@ -145,6 +149,15 @@ def breadth_first_traversal(tree):
 		for child in vertex.childs:
 			visited_list.append(child)
 	return node_list
+
+def get_max_depth(tree):
+	if tree.feature_index==-1 or len(tree.childs)==0:
+		return 1
+	else:
+		new_list = []
+		for child in tree.childs:
+			new_list.append(get_max_depth(child))
+		return 1+np.max(new_list)
 
 def get_node_count(tree):
 	if tree.feature_index==-1:
@@ -228,22 +241,41 @@ def main():
 		
 		my_tree = grow_tree(train_x_new,train_y,datapoints_indices)
 		# print_tree(tree)
+		max_depth = get_max_depth(my_tree)+1
+		
 		print("Total Nodes -> " + str(get_node_count(my_tree)))
 		modified = False
 		print("Training Data")
-		predicted = predict(my_tree,train_x_new,modified)
+		predicted = predict(my_tree,train_x_new,modified,max_depth,max_depth)
 		print(confusion_matrix(train_y,predicted))
 		print(accuracy_score(train_y,predicted))
 
 		print("Testing Data")
-		predicted = predict(my_tree,test_x_new,modified)
+		predicted = predict(my_tree,test_x_new,modified,max_depth,max_depth)
 		print(confusion_matrix(test_y,predicted))
 		print(accuracy_score(test_y,predicted))
 
 		print("Validation Data")
-		predicted = predict(my_tree,validation_x_new,modified)
+		predicted = predict(my_tree,validation_x_new,modified,max_depth,max_depth)
 		print(confusion_matrix(val_y,predicted))
 		print(accuracy_score(val_y,predicted))
+
+		# Getting accuracies
+		for depth in range(max_depth):
+			part1_train_accuracy[depth] = accuracy_score(train_y,predict(my_tree,train_x_new,modified,depth,max_depth))
+			part1_test_accuracy[depth] = accuracy_score(test_y,predict(my_tree,test_x_new,modified,depth,max_depth))
+			part1_val_accuracy[depth] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,depth,max_depth))
+
+		fig = plt.figure()
+		plt.title("Accuracies vs Depth")
+		plt.plot(part1_test_accuracy.keys(),part1_test_accuracy.values(),label = 'Testing')
+		plt.plot(part1_val_accuracy.keys(),part1_val_accuracy.values(), label = 'Validation')
+		plt.plot(part1_train_accuracy.keys(),part1_train_accuracy.values(), label = 'Training')
+		plt.xlabel("Depth")
+		plt.ylabel("Accuracies")
+		plt.legend()
+		# plt.show()
+		fig.savefig("Graph_Part1"+'.png')	
 	
 	elif part_num==2:
 		(train_x,train_y) = read_file(train_datapath,False)
@@ -261,7 +293,7 @@ def main():
 			datapoints_indices.append(i)
 		
 		my_tree = grow_tree(train_x_new,train_y,datapoints_indices)
-		
+		max_depth = get_max_depth(my_tree)+1
 		node_list = breadth_first_traversal(my_tree)
 		train_accuracy = {}
 		validation_accuracy = {}
@@ -269,16 +301,15 @@ def main():
 		node_count_dict = {}
 
 		modified = False
-		train_accuracy[0] = accuracy_score(train_y,predict(my_tree,train_x_new,modified))
-		validation_accuracy[0] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
-		test_accuracy[0] = accuracy_score(test_y,predict(my_tree,test_x_new,modified))
+		train_accuracy[0] = accuracy_score(train_y,predict(my_tree,train_x_new,modified,max_depth,max_depth))
+		validation_accuracy[0] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
+		test_accuracy[0] = accuracy_score(test_y,predict(my_tree,test_x_new,modified,max_depth,max_depth))
 		node_count_dict[0] = get_node_count(my_tree)
 
 		iter_num = 0
 		best_accuracy = -1
-
 		while True:
-			acc_prev = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
+			acc_prev = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
 			acc_after = 0
 			best_node = tree
 			iter_num+=1
@@ -292,7 +323,7 @@ def main():
 					node_feature = node.feature_index
 					node.childs = []
 					node.feature_index = -1
-					acc_after = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
+					acc_after = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
 					if acc_after>best_accuracy:
 						# print(acc_after)
 						best_accuracy = acc_after
@@ -305,9 +336,9 @@ def main():
 				best_node.feature_index = -1
 				node_count = get_node_count(my_tree)
 				node_count_dict[iter_num] = node_count
-				train_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
-				test_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
-				validation_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified))
+				train_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
+				test_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
+				validation_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
 				node_list = breadth_first_traversal(my_tree)
 			else:
 				break
@@ -315,17 +346,17 @@ def main():
 		# print_tree(tree)
 		print("Total Nodes -> " + str(get_node_count(my_tree)))
 		print("Training Data")
-		predicted = predict(my_tree,train_x_new,modified)
+		predicted = predict(my_tree,train_x_new,modified,max_depth,max_depth)
 		print(confusion_matrix(train_y,predicted))
 		print(accuracy_score(train_y,predicted))
 
 		print("Testing Data")
-		predicted = predict(my_tree,test_x_new,modified)
+		predicted = predict(my_tree,test_x_new,modified,max_depth,max_depth)
 		print(confusion_matrix(test_y,predicted))
 		print(accuracy_score(test_y,predicted))
 
 		print("Validation Data")
-		predicted = predict(my_tree,validation_x_new,modified)
+		predicted = predict(my_tree,validation_x_new,modified,max_depth,max_depth)
 		print(confusion_matrix(val_y,predicted))
 		print(accuracy_score(val_y,predicted))
 
@@ -357,22 +388,39 @@ def main():
 		my_tree = grow_treeV2(train_x_new,train_y,datapoints_indices)
 		print("Total Nodes = " + str(get_node_count(my_tree)))
 		# print_tree(my_tree)
-
+		max_depth = get_max_depth(my_tree)+1
 		modified = True
 		print("Training Data")
-		predicted = predict(my_tree,train_x_new,modified)
+		predicted = predict(my_tree,train_x_new,modified,max_depth,max_depth)
 		print(confusion_matrix(train_y,predicted))
 		print(accuracy_score(train_y,predicted))
 
 		print("Testing Data")
-		predicted = predict(my_tree,test_x_new,modified)
+		predicted = predict(my_tree,test_x_new,modified,max_depth,max_depth)
 		print(confusion_matrix(test_y,predicted))
 		print(accuracy_score(test_y,predicted))
 
 		print("Validation Data")
-		predicted = predict(my_tree,validation_x_new,modified)
+		predicted = predict(my_tree,validation_x_new,modified,max_depth,max_depth)
 		print(confusion_matrix(val_y,predicted))
 		print(accuracy_score(val_y,predicted))
+
+		# For plotting purpose
+		for depth in range(max_depth):
+			part1_train_accuracy[depth] = accuracy_score(train_y,predict(my_tree,train_x_new,modified,depth,max_depth))
+			part1_test_accuracy[depth] = accuracy_score(test_y,predict(my_tree,test_x_new,modified,depth,max_depth))
+			part1_val_accuracy[depth] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,depth,max_depth))
+
+		fig = plt.figure()
+		plt.title("Accuracies vs Depth")
+		plt.plot(part1_test_accuracy.keys(),part1_test_accuracy.values(),label = 'Testing')
+		plt.plot(part1_val_accuracy.keys(),part1_val_accuracy.values(), label = 'Validation')
+		plt.plot(part1_train_accuracy.keys(),part1_train_accuracy.values(), label = 'Training')
+		plt.xlabel("Depth")
+		plt.ylabel("Accuracies")
+		plt.legend()
+		# plt.show()
+		fig.savefig("Graph_Part3_2"+'.png')
 
 	elif part_num==4:
 		(train_x,train_y) = read_file(train_datapath,True)
