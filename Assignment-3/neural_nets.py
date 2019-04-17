@@ -17,7 +17,9 @@ def read_fileV2(datapath,distance):
 	return (x,y)
 
 def sigmoid_activation(a):
-	return 1/(1+np.exp(-1*a))
+	a1 = np.multiply(a>=0,a)
+	a2 = np.multiply(a<0,a)
+	return np.add(1/(1+np.exp(-a1)),np.divide(np.exp(a2),(1+np.exp(a2)))) - 0.5
 	
 def sigmoid_derivative(a):
 	return np.multiply(sigmoid_activation(a),1-sigmoid_activation(a))
@@ -86,7 +88,9 @@ def forward_prop(params,data_x,activation):
 	return forward_pass
 
 def loss_function(output_layer_output,actual_output):
-	loss = -1*np.add(np.multiply(actual_output,np.log(output_layer_output+np.multiply(1,output_layer_output==0))),np.multiply(1-actual_output,np.log((1-output_layer_output)+(1*output_layer_output==1))))
+	loss0 = np.multiply(actual_output,np.log(np.add(output_layer_output,np.multiply(1,output_layer_output==0))))
+	loss1_0 = np.multiply(1-actual_output,np.log(np.add(1-output_layer_output,np.multiply(1,output_layer_output==1))))
+	loss = -1*np.add(loss0,loss1_0)
 	return np.mean(loss,axis=1)
 	
 def backward_prop(params,forward_pass,learning_rate,y_data,activation):
@@ -94,11 +98,13 @@ def backward_prop(params,forward_pass,learning_rate,y_data,activation):
 	new_params = {}
 	m = y_data.shape[1]
 	der_output = forward_pass["a"+str((int)(len(params)/2))] - y_data
+	# der_output = normalization(der_output)
 	der_dict["dZ"+str((int)(len(params)/2))] = der_output
 	
 	if activation=="logistic":
 		for i in range((int)(len(params)/2) - 1,0,-1):
 			der_output = np.multiply(np.dot(np.transpose(params["W"+str(i+1)]),der_dict["dZ"+str(i+1)]),sigmoid_derivative(forward_pass["z"+str(i)]))
+			# der_output = normalization(der_output)
 			der_dict["dZ"+str(i)] = der_output
 
 		for i in range(1,(int)(len(params)/2) +1):
@@ -117,6 +123,7 @@ def backward_prop(params,forward_pass,learning_rate,y_data,activation):
 	else:
 		for i in range((int)(len(params)/2) - 1,0,-1):
 			der_output = np.multiply(np.dot(np.transpose(params["W"+str(i+1)]),der_dict["dZ"+str(i+1)]),relu_derivative(forward_pass["z"+str(i)]))
+			# der_output = normalization(der_output)
 			der_dict["dZ"+str(i)] = der_output
 
 		for i in range(1,(int)(len(params)/2) +1):
@@ -165,7 +172,7 @@ def main():
 		activation = "logistic"
 		epochs = 1000
 	else:
-		epochs = 1000
+		epochs = 3000
 
 	(train_x,train_y) = read_fileV2(train_datapath,num_outputs)
 	(test_x,test_y) = read_fileV2(test_datapath,num_outputs)

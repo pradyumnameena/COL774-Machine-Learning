@@ -44,7 +44,18 @@ def ohe_func(mat,categorical_features,num_categories,negative_cols):
 		mat[:,i]+=2
 	num_features = mat.shape[1]-len(categorical_features) + np.sum(num_categories)
 	ret_mat = np.asmatrix(np.zeros((len(mat),num_features),dtype=int))
-	return mat
+	new_index = 0
+	cat_index = 0
+	for i in range(mat.shape[1]):
+		if i in categorical_features:
+			for j in range(mat.shape[0]):
+				ret_mat[j,new_index+mat[j,i]] = 1
+			new_index+=num_categories[cat_index]
+			cat_index+=1
+		else:
+			ret_mat[:,new_index] = np.reshape(mat[:,i],(len(ret_mat),1))
+			new_index+=1
+	return ret_mat
 
 def pre_processing(mat,non_continuous_columns,negative_cols):
 	median = np.asmatrix(np.median(mat,axis=0),dtype=int)
@@ -266,6 +277,10 @@ def main():
 			part1_test_accuracy[depth] = accuracy_score(test_y,predict(my_tree,test_x_new,modified,depth,max_depth))
 			part1_val_accuracy[depth] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,depth,max_depth))
 
+		# print(part1_val_accuracy)
+		# print(part1_train_accuracy)
+		# print(part1_test_accuracy)
+
 		fig = plt.figure()
 		plt.title("Accuracies vs Depth")
 		plt.plot(part1_test_accuracy.keys(),part1_test_accuracy.values(),label = 'Testing')
@@ -305,7 +320,7 @@ def main():
 		validation_accuracy[0] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
 		test_accuracy[0] = accuracy_score(test_y,predict(my_tree,test_x_new,modified,max_depth,max_depth))
 		node_count_dict[0] = get_node_count(my_tree)
-
+		# print(node_count_dict[0])
 		iter_num = 0
 		best_accuracy = -1
 		while True:
@@ -336,10 +351,11 @@ def main():
 				best_node.feature_index = -1
 				node_count = get_node_count(my_tree)
 				node_count_dict[iter_num] = node_count
-				train_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
-				test_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
+				train_accuracy[iter_num] = accuracy_score(train_y,predict(my_tree,train_x_new,modified,max_depth,max_depth))
+				test_accuracy[iter_num] = accuracy_score(test_y,predict(my_tree,test_x_new,modified,max_depth,max_depth))
 				validation_accuracy[iter_num] = accuracy_score(val_y,predict(my_tree,validation_x_new,modified,max_depth,max_depth))
 				node_list = breadth_first_traversal(my_tree)
+				print(get_node_count(my_tree))
 			else:
 				break
 
@@ -362,14 +378,14 @@ def main():
 
 		fig = plt.figure()
 		plt.title("Accuracies vs Number of Nodes")
-		plt.plot(node_count_dict.values(), test_accuracy.values(), label = 'Testing')
-		plt.plot(node_count_dict.values(), validation_accuracy.values(), label = 'Validation')
-		plt.plot(node_count_dict.values(), train_accuracy.values(), label = 'Training')
+		plt.plot(node_count_dict.keys(), test_accuracy.values(), label = 'Testing')
+		plt.plot(node_count_dict.keys(), validation_accuracy.values(), label = 'Validation')
+		plt.plot(node_count_dict.keys(), train_accuracy.values(), label = 'Training')
 		plt.xlabel("Number of Nodes")
 		plt.ylabel('Accuracies')
 		plt.legend()
 		# plt.show()
-		fig.savefig("Accuracy_with_Nodes"+'.png')
+		fig.savefig("Graph_Part2"+'.png')
 
 	elif part_num==3:
 		(train_x,train_y) = read_file(train_datapath,False)
@@ -426,17 +442,84 @@ def main():
 		(train_x,train_y) = read_file(train_datapath,True)
 		(test_x,test_y) = read_file(test_datapath,True)
 		(val_x,val_y) = read_file(validation_datapath,True)
-		
-		criteria = "entropy"
-		split = "best"
-		# best depth = 3
-		depth = 3
-		min_sample_leaf = 4
-		min_sample_split = 2
 
-		dec_tree = tree.DecisionTreeClassifier(criterion=criteria,splitter="best",max_depth=depth,min_samples_split=min_sample_split,min_samples_leaf=min_sample_leaf)
-		dec_tree = dec_tree.fit(train_x,train_y)
-		
+		# SET OF BEST FEATURE VALUES. To directly use them comment the nested for loop section below
+		best_accuracy = -1
+		best_depth = 6
+		best_min_sample_leaf = 6
+		best_min_sample_split = 3
+
+		depth_list = [1,2,3,4,5,6,7,8,9,10,11,12]
+		min_sample_leaf_list = [2,3,4,5,6,7,8,9,10]
+		min_sample_split_list = [2,3,4,5,6,7,8,9,10]
+
+		for depth in depth_list:
+			for min_sample_leaf in min_sample_leaf_list:
+				for min_sample_split in min_sample_split_list:
+					dec_tree = tree.DecisionTreeClassifier(criterion="entropy",splitter="best",max_depth=depth,min_samples_split=min_sample_split,min_samples_leaf=min_sample_leaf)
+					dec_tree = dec_tree.fit(train_x,train_y)
+					acc = accuracy_score(val_y,np.array(dec_tree.predict(val_x),dtype=int))
+					if acc>best_accuracy:
+						print(str(acc))
+						best_accuracy = acc
+						best_depth = depth
+						best_min_sample_split = min_sample_split
+						best_min_sample_leaf = min_sample_leaf
+
+		print("best_depth -> " + str(best_depth))
+		print("best_min_sample_leaf -> " + str(best_min_sample_leaf))
+		print("best_min_sample_split -> " + str(best_min_sample_split))
+
+		variation_with_sample_split = {}
+		for i in min_sample_split_list:
+			dec_tree = tree.DecisionTreeClassifier(criterion="entropy",splitter="best",max_depth=best_depth,min_samples_split=i,min_samples_leaf=best_min_sample_leaf)
+			dec_tree = dec_tree.fit(train_x,train_y)
+			acc = accuracy_score(val_y,np.array(dec_tree.predict(val_x),dtype=int))
+			variation_with_sample_split[i] = acc
+
+		variation_with_depth = {}
+		for i in depth_list:
+			dec_tree = tree.DecisionTreeClassifier(criterion="entropy",splitter="best",max_depth=i,min_samples_split=best_min_sample_split,min_samples_leaf=best_min_sample_leaf)
+			dec_tree = dec_tree.fit(train_x,train_y)
+			acc = accuracy_score(val_y,np.array(dec_tree.predict(val_x),dtype=int))
+			variation_with_depth[i] = acc
+
+		variation_with_sample_leaf = {}
+		for i in min_sample_leaf_list:
+			dec_tree = tree.DecisionTreeClassifier(criterion="entropy",splitter="best",max_depth=best_depth,min_samples_split=best_min_sample_split,min_samples_leaf=i)
+			dec_tree = dec_tree.fit(train_x,train_y)
+			acc = accuracy_score(val_y,np.array(dec_tree.predict(val_x),dtype=int))
+			variation_with_sample_leaf[i] = acc
+
+		fig = plt.figure()
+		plt.title("Accuracy vs Depth")
+		plt.plot(variation_with_depth.keys(),variation_with_depth.values())
+		plt.xlabel("Depth")
+		plt.ylabel("Accuracies")
+		plt.legend()
+		# plt.show()
+		fig.savefig("Accuracy_with_depth"+'.png')
+
+		fig = plt.figure()
+		plt.title("Accuracy vs min_sample_split")
+		plt.plot(variation_with_sample_split.keys(),variation_with_sample_split.values())
+		plt.xlabel("min_sample_split")
+		plt.ylabel("Accuracy")
+		# plt.show()
+		fig.savefig("Accuracy_with_min_sample_split"+'.png')
+
+		fig = plt.figure()
+		plt.title("Accuracy vs min_sample_leaf")
+		plt.plot(variation_with_sample_leaf.keys(),variation_with_sample_leaf.values())
+		plt.xlabel("min_sample_leaf")
+		plt.ylabel("Accuracy")
+		# plt.show()
+		fig.savefig("Accuracy_with_min_sample_leaf"+'.png')
+
+
+		dec_tree = tree.DecisionTreeClassifier(criterion="entropy",splitter="best",max_depth=best_depth,min_samples_split=best_min_sample_split,min_samples_leaf=best_min_sample_leaf)
+		dec_tree = dec_tree.fit(train_x,train_y)			 
+
 		print("Training Set")
 		predicted_train = np.array(dec_tree.predict(train_x),dtype=int)
 		confatrix_train = confusion_matrix(train_y,predicted_train)
@@ -457,7 +540,7 @@ def main():
 
 	elif part_num==5:
 		categorical_features = [1,2,3,5,6,7,8,9,10]
-		num_categories = [4,4,4,4,4,4,4,4,4]
+		num_categories = [2,4,3,12,12,12,12,12,12]
 		negative_cols = [5,6,7,8,9,10]
 		(train_x,train_y) = read_file(train_datapath,True)
 		(test_x,test_y) = read_file(test_datapath,True)
@@ -467,12 +550,11 @@ def main():
 		test_x_new = ohe_func(test_x,categorical_features,num_categories,negative_cols)
 		val_x_new = ohe_func(val_x,categorical_features,num_categories,negative_cols)
 
-		criteria = "gini"
-		depth = 10
-		min_sample_leaf = 1
-		min_sample_split = 2
-		# dec_tree = tree.DecisionTreeClassifier(criterion=criteria,splitter="best",max_depth=depth,min_samples_split=min_sample_split,min_samples_leaf=min_sample_leaf)
-		dec_tree = tree.DecisionTreeClassifier(criterion=criteria)
+		criteria = "entropy"
+		depth = 6
+		min_sample_leaf = 6
+		min_sample_split = 3
+		dec_tree = tree.DecisionTreeClassifier(criterion=criteria,splitter="best",max_depth=depth,min_samples_split=min_sample_split,min_samples_leaf=min_sample_leaf)
 		dec_tree = dec_tree.fit(train_x_new,train_y)
 
 		print("Training Set")
@@ -495,7 +577,7 @@ def main():
 
 	elif part_num==6:
 		categorical_features = [1,2,3,5,6,7,8,9,10]
-		num_categories = [4,4,4,4,4,4,4,4,4]
+		num_categories = [2,4,3,12,12,12,12,12,12]
 		negative_cols = [5,6,7,8,9,10]
 		(train_x,train_y) = read_file(train_datapath,True)
 		(test_x,test_y) = read_file(test_datapath,True)
@@ -505,15 +587,85 @@ def main():
 		test_x_new = ohe_func(test_x,categorical_features,num_categories,negative_cols)
 		val_x_new = ohe_func(val_x,categorical_features,num_categories,negative_cols)
 
-		num_estimators = 10
-		criteria = "entropy"
-		depth = 10
-		min_sample_leaf = 1
-		min_sample_split = 2
-		bs = True
-		# rf = RandomForestClassifier(n_estimators=num_estimators,criterion=criteria,max_depth=depth,min_samples_split=min_sample_split,min_samples_leaf=min_sample_leaf,bootstrap=bs)
-		rf = RandomForestClassifier(criterion=criteria)
-		rf.fit(train_x_new,np.ravel(train_y))
+		# SET OF BEST FEATURE VALUES. To directly use them comment the nested for loop section below
+		best_num_estimators = 14
+		best_bootstrap = True
+		best_num_features = 52
+		best_accuracy = -1
+
+		num_estimators_list = [4,5,6,7,8,9,10,11,12,13,14,15]
+		bootstrap_list = [True,False]
+		max_featues_list = []
+		for i in range(1,train_x_new.shape[1]):
+			max_featues_list.append(i)
+
+		for ne in num_estimators_list:
+			for bs in bootstrap_list:
+				for mf in max_featues_list:
+					rf = RandomForestClassifier(n_estimators=ne,criterion="entropy",bootstrap=bs,max_features=mf)
+					rf.fit(train_x_new,np.ravel(train_y))
+					acc = accuracy_score(val_y,np.array(rf.predict(val_x_new),dtype=int))
+					if acc>best_accuracy:
+						print(acc)
+						best_accuracy = acc
+						best_num_estimators = ne
+						best_bootstrap = bs
+						best_num_features = mf
+
+		print("best num estimators -> " + str(best_num_estimators))
+		print("bootstrap value -> " + str(best_bootstrap))
+		print("max_features -> " + str(best_num_features))
+
+		variation_with_n_estimators = {}
+		for ne in num_estimators_list:
+			rf = RandomForestClassifier(n_estimators=ne,criterion="entropy",bootstrap=best_bootstrap,max_features=best_num_features)
+			rf.fit(train_x_new,np.ravel(train_y))
+			acc = accuracy_score(val_y,np.array(rf.predict(val_x_new),dtype=int))
+			variation_with_n_estimators[ne] = acc
+
+		variation_with_bootstrap = {}
+		for i in range(len(bootstrap_list)):
+			rf = RandomForestClassifier(n_estimators=best_num_estimators,criterion="entropy",bootstrap=bootstrap_list[1-i],max_features=best_num_features)
+			rf.fit(train_x_new,np.ravel(train_y))
+			acc = accuracy_score(val_y,np.array(rf.predict(val_x_new),dtype=int))
+			variation_with_bootstrap[i] = acc
+
+		variation_with_max_features = {}
+		for mf in max_featues_list:
+			rf = RandomForestClassifier(n_estimators=best_num_estimators,criterion="entropy",bootstrap=best_bootstrap,max_features=mf)
+			rf.fit(train_x_new,np.ravel(train_y))
+			acc = accuracy_score(val_y,np.array(rf.predict(val_x_new),dtype=int))
+			variation_with_max_features[mf] = acc
+
+		fig = plt.figure()
+		plt.title("Accuracy vs n_estimators")
+		plt.plot(variation_with_n_estimators.keys(),variation_with_n_estimators.values())
+		plt.xlabel("n_estimators")
+		plt.ylabel("Accuracies")
+		plt.legend()
+		# plt.show()
+		fig.savefig("Accuracy_with_n_estimators"+'.png')
+
+		fig = plt.figure()
+		plt.title("Accuracy vs Bootstrap")
+		plt.plot(variation_with_bootstrap.keys(),variation_with_bootstrap.values())
+		plt.xlabel("Bootstrap")
+		plt.ylabel("Accuracies")
+		plt.legend()
+		# plt.show()
+		fig.savefig("Accuracy_with_bootstrap"+'.png')
+
+		fig = plt.figure()
+		plt.title("Accuracy vs max_features")
+		plt.plot(variation_with_max_features.keys(),variation_with_max_features.values())
+		plt.xlabel("Max Features")
+		plt.ylabel("Accuracies")
+		plt.legend()
+		# plt.show()
+		fig.savefig("Accuracy_with_max_features"+'.png')
+
+		rf = RandomForestClassifier(n_estimators=best_num_estimators,criterion="entropy",bootstrap=best_bootstrap,max_features=best_num_features)
+		rf.fit(train_x_new,np.ravel(train_y))		
 
 		print("Training Set")
 		predicted_train = np.array(rf.predict(train_x_new),dtype=int)
