@@ -1,10 +1,12 @@
 import os
+import sys
 import cv2
 import time
-import torch
+import pickle
 import numpy as np
 import pandas as pd
-# from svmutil import *
+from svmutil import *
+from sklearn.decomposition import PCA
 
 def generate_pca_dataset(datapath):
 	time1 = time.clock()
@@ -16,42 +18,29 @@ def generate_pca_dataset(datapath):
 	'00000041', '00000042', '00000043', '00000044', '00000045', '00000046', '00000047', '00000048', '00000049', '00000050']
 	gray_list = []
 	for folder in folders:
-		print(folder)
 		all_files = os.listdir(datapath+"/"+folder+"/")
 		png_files = []
 		for file in all_files:
 			png_files.append(file) if ('.png' in file) else None
 		for file in png_files:
-			gray_list.append(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file), cv2.COLOR_BGR2GRAY)))
+			gray_list.append(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file)[32:196,11:150,:], cv2.COLOR_BGR2GRAY)))
 		del(all_files)
 		del(png_files)
 	a = np.array(gray_list)
 	del(gray_list)
 	del(folders)
 	time2 = time.clock()
-	pd.DataFrame(a).to_csv("pca_dataset_50_epsd.csv",header=None,index=None)
+	pca_dataset_pickle_file = open("pca_dataset_pickle",'ab')
+	pickle.dump(a,pca_dataset_pickle_file)
+	pca_dataset_pickle_file.close()
 	time3 = time.clock()
 	print("Time taken for generating list -> " + str(time2-time1))
-	print("Time taken for saving into csv file -> "+ str(time3-time2))
+	print("Time taken for saving array into pickle file -> "+ str(time3-time2))
 	print("Dataset generated!!! Hurray")
 
-def np_pca(dataset):
+def generate_svm_dataset(my_pca,datapath):
 	time1 = time.clock()
-	dataset = np.subtract(dataset,np.mean(dataset,axis=0))
-	co_variance = np.cov(dataset,rowvar=False)
-	E,V = np.linalg.eigh(co_variance)
-	key = np.argsort(E)[::-1][0:50]
-	V = V[:, key]
-	time2 = time.clock()
-	pd.DataFrame(np.array(V)).to_csv("pca_50_principal_components.csv",header=None,index=None)
-	time3 = time.clock()
-	print("Time taken for generating principal components -> " + str(time2-time1))
-	print("Time taken for saving into csv file -> " + str(time3-time2))
-	print("numpy PCA complete!!! Hurray")
-
-def generate_svm_dataset(pca_comp_matrix,datapath):
-	folder_list = os.listdir(datapath+"/")[2:]
-	folder_list = folder_list[:-1]
+	folder_list = os.listdir(datapath+"/")
 	list_for_array = []
 	reward_list = []
 	counter = 0
@@ -70,29 +59,33 @@ def generate_svm_dataset(pca_comp_matrix,datapath):
 			frame_num_list = [x for x in range(last_frame-6,last_frame+1)]
 			curr_data = []
 			for frame_num in frame_num_list:
-				curr_data.append(np.dot(cv2.imread(datapath+"/"+folder+"/"+png_files[frame_num]),pca_comp_matrix))
-			if rew_file[last_frame]==1:
+				curr_data.append(my_pca.transform(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file)[32:196,11:150,:], cv2.COLOR_BGR2GRAY)).reshape(1,-1)).tolist())
+			if rew_file[last_frame+1]==1:
 				for drop1 in range(len(frame_num_list)-2):
 					for drop2 in range(drop1+1,len(frame_num_list)-1):
 						new_list = [y for y in [0,1,2,3,4,5,6] if y not in [drop1,drop2]]
-						new_data = np.array(np.zeros((1,160,3),dtype=float))
+						new_data = []
 						for idx in new_list:
-							new_data = np.concatenate((new_data,curr_data[idx]),axis=0)
-						del(new_list)
-						list_for_array.append(np.array(new_data[1:,:,:]))
+							new_data.extend(curr_data[idx])
+						list_for_array.append(new_data)
 						reward_list.append(1)
 						pros+=1
+						del(idx)
+						del(new_data)
+						del(new_list)
 			else:
 				for drop1 in range(len(frame_num_list)-2):
 					for drop2 in range(drop1+1,len(frame_num_list)-1):
 						new_list = [y for y in [0,1,2,3,4,5,6] if y not in [drop1,drop2]]
-						new_data = np.array(np.zeros((1,160,3),dtype=float))
+						new_data = []
 						for idx in new_list:
-							new_data = np.concatenate((new_data,curr_data[idx]),axis=0)
-						del(new_list)
-						list_for_array.append(np.array(new_data[1:,:,:]))
+							new_data.extend(curr_data[idx])
+						list_for_array.append(new_data)
 						reward_list.append(0)
-						pros+=1
+						cons+=1
+						del(idx)
+						del(new_data)
+						del(new_list)
 			del(curr_data)
 			del(frame_num_list)
 		del(all_files)
@@ -102,11 +95,23 @@ def generate_svm_dataset(pca_comp_matrix,datapath):
 		print("Total pros -> " + str(pros_list[counter]))
 		print("Total cons -> " + str(cons_list[counter]))
 		counter+=1
-	return list_for_array,reward_list
+	time2 = time.clock()
+	print("Time taken to generate list = " + str(time2-time1))
+	svm_train_x = open("svm_training_data_pickle_x",'ab')
+	pickle.dump(np.array(list_for_array),svm_train_x)
+	svm_train_x.close()
+	time3 = time.clock()
+	print("Time taken to generate pickle file for x = " + str(time3-time2))
 
-def generate_svm_data(datapath,pca_comp_matrix):
+	svm_train_y = open("svm_training_data_pickle_y",'ab')
+	pickle.dump(np.array(reward_list),svm_train_y)
+	svm_train_y.close()
+	time4 = time.clock()
+	print("Time taken to generate pickle file for y = " + str(time4-time3))
+
+def generate_svm_test_data(datapath,my_pca):
+	time1 = time.clock()
 	folder_list = os.listdir(datapath+"/")[2:]
-	folder_list = folder_list[:-1]
 	list_for_array = []
 	reward_list = np.array(pd.read_csv(datapath + "/rewards.csv",header=None,dtype=int))[:,1].tolist()
 	for folder in folder_list:
@@ -115,27 +120,50 @@ def generate_svm_data(datapath,pca_comp_matrix):
 		for file in all_files:
 			png_files.append(file) if ('.png' in file) else None
 		for file in png_files:
-			curr_data.append(np.dot(cv2.imread(datapath+"/"+folder+"/"+files),pca_comp_matrix))
+			list_for_array.append(my_pca.transform(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file)[32:196,11:150,:], cv2.COLOR_BGR2GRAY)).reshape(1,-1)).tolist())
 		del(all_files)
 		del(png_files)
-	return list_for_array,reward_list
+	time2 = time.clock()
+	print("Time taken to generate list = " + str(time2-time1))
+
+	svm_val_x = open("svm_val_data_pickle_x",'ab')
+	pickle.dump(np.array(list_for_array),svm_val_x)
+	svm_val_x.close()
+	time3 = time.clock()
+	print("Time taken to generate pickle file for validation x = " + str(time3-time2))
+
+	svm_val_y = open("svm_val_data_pickle_y",'ab')
+	pickle.dump(np.array(reward_list),svm_val_y)
+	svm_val_y.close()
+	time4 = time.clock()
+	print("Time taken to generate pickle file for validation y = " + str(time4-time3))
 
 def main():
 	generate_pca_dataset("../../train_dataset")
-	dataset = pd.read_csv("../../pca_dataset_50_epsd.csv",header=None,dtype=float)
-	np_pca(np.array(dataset))
-	pca_components = np.asmatrix(np.array(pd.read_csv("../../pca_50_principal_components.csv",header=None)))
-	datapath = "../../train_dataset"
-	(train_x,train_y) = generate_svm_dataset(pca_components,datapath)
-
-	# loading the validation data
-	(val_x,val_y) = generate_svm_data("../../validation_dataset",pca_components)
-	del(pca_components)
-
+	pca_dataset_pickle_file = open("pca_dataset_pickle",'rb')
+	dataset = pickle.load(pca_dataset_pickle_file)
+	
+	my_pca = PCA(n_components=50)
+	my_pca.fit(dataset)
+	generate_svm_dataset("../../train_dataset",my_pca)
+	generate_svm_test_data("../../../validation_dataset",my_pca)
+	
+	svm_training_data_pickle_x = open("svm_training_data_pickle_x",'rb')
+	train_x = pickle.load(svm_training_data_pickle_x)
+	svm_training_data_pickle_x.close()
+	
+	svm_training_data_pickle_y = open("svm_training_data_pickle_y",'rb')
+	train_y = pickle.load(svm_training_data_pickle_y)
+	svm_training_data_pickle_y.close()
+	
+	del(my_pca)
 	problem = svm_problem(train_x,train_y)
 	del(train_x)
 	del(train_y)
-	linear_param = svm_parameter("-s 0 -c 1 -t 0")
+
+	penalty = 1
+	gamma = 0.05
+	linear_param = svm_parameter("-s 0 -c " + str(penalty) + " -t 0")
 	linear_model = svm_train(problem,linear_param)
 	linear_pred_lbl, linear_pred_acc, linear_pred_val = svm_predict(val_y,val_x,linear_model)
 	gaussian_param = svm_parameter("-s 0 -c " + str(penalty) + " -t 2 -g " + str(gamma))
