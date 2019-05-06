@@ -5,8 +5,6 @@ import time
 import pickle
 import numpy as np
 import pandas as pd
-sys.path.append('/home/cse/btech/cs1160375/version4/libsvm-3.23/python')
-from svmutil import *
 from sklearn.decomposition import PCA
 from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix,accuracy_score,f1_score
@@ -26,22 +24,22 @@ def generate_pca_dataset(datapath):
 		for file in all_files:
 			png_files.append(file) if ('.png' in file) else None
 		for file in png_files:
-			gray_list.append(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file)[32:196,11:153,:], cv2.COLOR_BGR2GRAY)))
+			gray_list.append(np.float32(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file)[32:196,11:153,:], cv2.COLOR_BGR2GRAY))/255.0))
 		del(all_files)
 		del(png_files)
 	a = np.array(gray_list)
 	del(gray_list)
 	del(folders)
-	pca_dataset_pickle_file = open("pca_dataset_pickle",'ab')
-	pickle.dump(a,pca_dataset_pickle_file)
-	pca_dataset_pickle_file.close()
-	print("Dataset generated!!! Hurray")
+	time2 = time.clock()
+	print("Time taken to generate dataset for PCA -> " + str(time2-time1))
+	return a
 
 def pca_transform_folder_wise(datapath,my_pca):
 	time1 = time.clock()
 	folder_list = os.listdir(datapath+"/")
 	counter = 0
 	for folder in folder_list:
+		time2 = time.clock()
 		print(folder)
 		all_files = os.listdir(datapath+"/"+folder+"/")
 		png_files = []
@@ -49,20 +47,24 @@ def pca_transform_folder_wise(datapath,my_pca):
 			png_files.append(file) if ('.png' in file) else None
 		curr_data = []
 		for file in png_files:
-			curr_data.append(my_pca.transform(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file)[22:196,11:153,:], cv2.COLOR_BGR2GRAY)).reshape(1,-1)).tolist())
+			curr_data.append(my_pca.transform(np.float32(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file)[32:196,11:153,:], cv2.COLOR_BGR2GRAY)).reshape(1,-1)/255.0)).tolist())
 		del(all_files)
 		del(png_files)
-		svm_train_x = open(datapath+"/"+folder+"/pca_transformed_list",'ab')
+		svm_train_x = open(datapath+"/"+folder+"/pca_normalized_transform_list",'ab')
 		pickle.dump(curr_data,svm_train_x)
 		svm_train_x.close()
+		time3 = time.clock()
+		print("Time taken to generate and store pickle = " + str(time3-time2))
 	time3 = time.clock()
-	print("Time taken to generate all pickle files = " + str(time3-time1))
+	print("Time taken to generate all pickle files folder wise = " + str(time3-time1))
 
-def generate_svm_test_data(datapath,my_pca):
+def synthesize_svm_data(datapath,my_pca,name,reward_avail):
+	time1 = time.clock()
 	folder_list = os.listdir(datapath+"/")
-	folder_list.remove("rewards.csv")
+	if reward_avail==1:
+		folder_list.remove("rewards.csv")
+		reward_list = np.array(pd.read_csv(datapath + "/rewards.csv",header=None,dtype=int))[:,1].tolist()
 	list_for_array = []
-	reward_list = np.array(pd.read_csv(datapath + "/rewards.csv",header=None,dtype=int))[:,1].tolist()
 	for folder in folder_list:
 		all_files = os.listdir(datapath+"/"+folder+"/")
 		png_files = []
@@ -70,29 +72,37 @@ def generate_svm_test_data(datapath,my_pca):
 		for file in all_files:
 			png_files.append(file) if ('.png' in file) else None
 		for file in png_files:
-			curr_data.extend(my_pca.transform(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file)[22:196,11:153,:], cv2.COLOR_BGR2GRAY)).reshape(1,-1)).tolist())
+			curr_data.extend(my_pca.transform(np.float32(np.ravel(cv2.cvtColor(cv2.imread(datapath+"/"+folder+"/"+file)[32:196,11:153,:], cv2.COLOR_BGR2GRAY)).reshape(1,-1)/255.0).tolist()))
 		list_for_array.append(curr_data)
 		del(curr_data)
 		del(all_files)
 		del(png_files)
-	
-	svm_val_x = open("svm_val_pickle_x",'ab')
+	time2 = time.clock()
+	print("Time taken to generate list = " + str(time2-time1))
+
+	svm_val_x = open(name+"x",'ab')
 	pickle.dump(list_for_array,svm_val_x)
 	svm_val_x.close()
-	
-	svm_val_y = open("svm_val_pickle_y",'ab')
-	pickle.dump(reward_list,svm_val_y)
-	svm_val_y.close()
-	
-def get_train_data(datapath):
+	time3 = time.clock()
+	print("Time taken to generate pickle file for x = " + str(time3-time2))
+
+	if reward_avail==1:
+		svm_val_y = open(name+"y",'ab')
+		pickle.dump(reward_list,svm_val_y)
+		svm_val_y.close()
+		time4 = time.clock()
+		print("Time taken to generate pickle file for y = " + str(time4-time3))
+
+def get_train_data(datapath,num_folders):
 	time1 = time.clock()
 	train_x = []
 	train_y = []
 	folder_list = os.listdir(datapath+"/")
-	for folder in folder_list:
+	for folder_idx in range(num_folders):
+		folder = folder_list[folder_idx]
 		time2 = time.clock()
 		reward_array = np.array(pd.read_csv(datapath+"/"+folder+"/rew.csv",dtype=int)).tolist()
-		pickle_file = open(datapath+"/"+folder+"/pca_transformed_list",'rb')
+		pickle_file = open(datapath+"/"+folder+"/pca_normalized_transform_list",'rb')
 		curr_data = pickle.load(pickle_file)
 		pickle_file.close()
 		del(pickle_file)
@@ -110,110 +120,148 @@ def get_train_data(datapath):
 							new_data.extend(data[idx])
 						train_x.append(new_data)
 						train_y.append(reward_array[last_frame+1][0])
+						if last_frame%3==0:
+							train_x.append(new_data)
+							train_y.append(reward_array[last_frame+1][0])
 						del(new_list)
 						del(new_data)
-						del(idx)
 			else:
-				for drop1 in range(5):
-					for drop2 in range(drop1+1,6):
-						new_list = [y for y in [0,1,2,3,4,5,6] if y not in [drop1,drop2]]
-						new_data = []
-						for idx in new_list:
-							new_data.extend(data[idx])
-						train_x.append(new_data)
-						train_y.append(reward_array[last_frame+1][0])
-						del(new_list)
-						del(new_data)
-						del(idx)
-			del(drop1)
-			del(drop2)
+				count_max = folder_idx%2
+				for count in range(count_max):
+					drop1 = 0
+					drop2 = 0
+					while drop1==drop2:
+						drop1 = np.random.randint(6)
+						drop2 = np.random.randint(6)
+					new_list = [y for y in [0,1,2,3,4,5,6] if y not in [drop1,drop2]]
+					new_data = []
+					for idx in new_list:
+						new_data.extend(data[idx])
+					train_x.append(new_data)
+					train_y.append(reward_array[last_frame+1][0])
+					del(new_list)
+					del(new_data)
 			del(data)
 			del(frame_num)
 			del(frame_num_list)
 			time3 = time.clock()
 		print("Time taken to generate data from "+folder+" -> "+str(time3-time2))
-		break
 	time2 = time.clock()
 	print("Total time taken to generate train data -> " + str(time2-time1))
 	return train_x,train_y
-
-def read_svm_test_data():
+	 
+def get_test_data(val_or_test,reward_avail):
+	path = ""
 	val_x = []
-	svm_test_x = open("svm_val_pickle_x",'rb')
-	val_dash = pickle.load(svm_test_x)
-	svm_test_x.close()
-	del(svm_test_x)
 
-	for i in range(len(val_dash)):
+	if val_or_test==0:
+		path = "./pca_val_normalized"
+	else:
+		path = "pca_test_normalized"
+
+	# Loading the x file
+	pickle_file = open(path+"x",'rb')
+	data_dash = pickle.load(pickle_file)
+	pickle_file.close()
+	for i in range(len(data_dash)):
 		curr_data = []
 		for j in range(5):
-			curr_data.extend(val_dash[i][j])
+			curr_data.extend(data_dash[i][j])
 		val_x.append(curr_data)
-	
-	svm_test_y = open("svm_val_pickle_y",'rb')
-	val_y = pickle.load(svm_test_y)
-	svm_test_y.close()
-	del(svm_test_y)
-	return val_x,val_y	 
 
-def normalize(input_data):
-	for i in range(len(input_data)):
-		for j in range(len(input_data[i])):
-			input_data[i][j] = input_data[i][j]/255
-	return input_data
+	if val_or_test==1:
+		return val_x
+	else:
+		pickle_file = open(path+"y",'rb')
+		data_dash = pickle.load(pickle_file)
+		pickle_file.close()
+		return val_x,data_dash
 
 def main():
-	# generate_pca_dataset("train_dataset")
+	# dataset = generate_pca_dataset("../train_dataset")
 	# pca_dataset_pickle_file = open("pca_dataset_pickle",'rb')
 	# dataset = pickle.load(pca_dataset_pickle_file)
 	# my_pca = PCA(n_components=50)
 	# my_pca.fit(dataset)
-	# pca_transform_folder_wise("train_dataset",my_pca)
-	# generate_svm_test_data("../validation_dataset",my_pca)
+	# del(dataset)
+	# pca_transform_folder_wise("../train_dataset",my_pca)
+	# synthesize_svm_data("../validation_dataset",my_pca,"pca_val_normalized",1)
+	# synthesize_svm_data("../test_dataset",my_pca,"pca_test_normalized",0)
 	# del(my_pca)
 	
-	train_x,train_y = get_train_data("../train_dataset")
-	# train_x = normalize(train_x)
-	val_x,val_y = read_svm_test_data()
-	# val_x = normalize(val_x)
-	penalty = 1
-	gamma = 0.05
+	time1 = time.clock()
+	num_folders = 500
+	train_x,train_y = get_train_data("../train_dataset",num_folders)
+	time2 = time.clock()
+	print("Training data read in " + str(time2-time1))
 	
+	val_x,val_y = get_test_data(0,1)
+	test_x = get_test_data(1,0)
+	penalty = 5
+	gamma = "auto"
+
+	print("Val and test data read")	
+	
+	time3 = time.clock()	
 	linear_svm = SVC(C=penalty,kernel='linear',max_iter=4000)
 	linear_svm.fit(train_x,train_y)
+	time4 = time.clock()
+	print("Linear trained in " + str(time4-time3))
+
+	time5 = time.clock()
+	gaussian_svm = SVC(C=penalty,kernel='rbf',gamma=gamma,max_iter=4000)
+	gaussian_svm.fit(train_x,train_y)
+	time6 = time.clock()
+	print("Gaussian trained in " + str(time6-time5))
+
+	linear_svm_pickle = open("svm_linear_trained",'ab')
+	pickle.dump(linear_svm,linear_svm_pickle)
+	linear_svm_pickle.close()
+
+	gaussian_svm_pickle = open("gaussian_svm_trained",'ab')
+	pickle.dump(gaussian_svm,gaussian_svm_pickle)
+	gaussian_svm_pickle.close()
+
+	linear_svm_pickle = open("svm_linear_trained",'rb')
+	linear_svm = pickle.load(linear_svm_pickle)
+	linear_svm_pickle.close()
+
+	gaussian_svm_pickle = open("gaussian_svm_trained",'rb')
+	gaussian_svm = pickle.load(gaussian_svm_pickle)
+	gaussian_svm_pickle.close()
 	
 	linear_pred_lbl = linear_svm.predict(train_x)
 	print("Linear Model with penalty = " + str(penalty) + ": ")
-	print("Stats for Train data")
-	print("Accuracy -> " + str(accuracy_score(np.array(train_y),linear_pred_lbl)))
-	print("F1_score Macro -> " + str(f1_score(np.array(train_y),linear_pred_lbl,average="micro")))
-	print("F1_score None -> " + str(f1_score(np.array(train_y),linear_pred_lbl)))
+	print("Train Accuracy -> " + str(accuracy_score(np.array(train_y),linear_pred_lbl)))
+	print("Train F1_score -> " + str(f1_score(np.array(train_y),linear_pred_lbl,average="micro")))
 	print(confusion_matrix(np.array(train_y),linear_pred_lbl))
+	print(f1_score(np.array(train_y),linear_pred_lbl))
 	
 	linear_pred_lbl = linear_svm.predict(val_x)	
-	print("Stats for Test data")
-	print("Accuracy -> " + str(accuracy_score(np.array(val_y),linear_pred_lbl)))
-	print("F1_score Macro -> " + str(f1_score(np.array(val_y),linear_pred_lbl,average="micro")))
-	print("F1_score None -> " + str(f1_score(np.array(val_y),linear_pred_lbl)))
+	print("Test Accuracy -> " + str(accuracy_score(np.array(val_y),linear_pred_lbl)))
+	print("Test F1_score -> " + str(f1_score(np.array(val_y),linear_pred_lbl,average="micro")))
 	print(confusion_matrix(np.array(val_y),linear_pred_lbl))
-	
-	gaussian_svm = SVC(C=penalty,kernel='rbf',gamma=gamma,max_iter=4000)
-	gaussian_svm.fit(train_x,train_y)
+	print(f1_score(np.array(val_y),linear_pred_lbl))
+	# time5 = time.clock()
 	
 	gaussian_pred_lbl = gaussian_svm.predict(train_x)
 	print("Gaussian Model with penalty = " + str(penalty) + " and gamma = " + str(gamma))
-	print("Stats for Train data")
-	print("Accuracy -> " + str(accuracy_score(np.array(train_y),gaussian_pred_lbl)))
-	print("F1_score Macro -> " + str(f1_score(np.array(train_y),gaussian_pred_lbl,average="micro")))
-	print("F1_score None -> " + str(f1_score(np.array(train_y),linear_pred_lbl)))
+	print("Train Accuracy -> " + str(accuracy_score(np.array(train_y),gaussian_pred_lbl)))
+	print("Train F1_score -> " + str(f1_score(np.array(train_y),gaussian_pred_lbl,average="micro")))
 	print(confusion_matrix(np.array(train_y),gaussian_pred_lbl))
+	print(f1_score(np.array(train_y),gaussian_pred_lbl))
 	
 	gaussian_pred_lbl = gaussian_svm.predict(val_x)
-	print("Stats for Test data")
-	print("Accuracy -> " + str(accuracy_score(np.array(val_y),gaussian_pred_lbl)))
-	print("F1_score Macro -> " + str(f1_score(np.array(val_y),gaussian_pred_lbl,average="micro")))
-	print("F1_score None -> " + str(f1_score(np.array(val_y),linear_pred_lbl)))	
-	print(confusion_matrix(np.array(val_y),gaussian_pred_lbl))	
+	print("Test Accuracy -> " + str(accuracy_score(np.array(val_y),gaussian_pred_lbl)))
+	print("Test F1_score -> " + str(f1_score(np.array(val_y),gaussian_pred_lbl,average="micro")))	
+	print(confusion_matrix(np.array(val_y),gaussian_pred_lbl))
+	print(f1_score(np.array(val_y),gaussian_pred_lbl))	
+	
+	columns = ["Prediction"]
+	linear_test_pred = np.ravel(linear_svm.predict(test_x)).tolist()
+	gaussian_test_pred = np.ravel(gaussian_svm.predict(test_x)).tolist()
+	pd.DataFrame(np.array(linear_test_pred)).to_csv("linear_svm_prediction.csv",header=columns,index=True)
+	pd.DataFrame(np.array(gaussian_test_pred)).to_csv("gaussian_svm_prediction.csv",header=columns,index=True)
 
 if __name__ == '__main__':
 	main()
