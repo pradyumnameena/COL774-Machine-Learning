@@ -9,10 +9,12 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
 
+# reading data from csv files
 def get_data(data_path,issubset,digit1,digit2):
 	train_data = np.array(pd.read_csv(data_path,header=None,dtype=float).values)
 	train_output = np.array(train_data[:,784:785])
 
+	# True means we have to do binary classification between two digits only
 	if issubset==True:
 		train_data = train_data[np.ix_((train_data[:,784]==digit1) | (train_data[:,784]==digit2))]
 		train_output = train_data[:,784:785]
@@ -25,6 +27,7 @@ def get_data(data_path,issubset,digit1,digit2):
 	train_data = train_data/255
 	return (np.asmatrix(train_data[:,0:784]),np.asmatrix(train_output))
 
+# plotting the confusion matrix
 def draw_confusion(confatrix):
 	plt.imshow(confatrix)
 	plt.title("Confusion Matrix")
@@ -34,7 +37,7 @@ def draw_confusion(confatrix):
 	plt.xlabel("Predicted label")
 	plt.show()
 
-# Linear kernel using cvxopt for binary classification
+# Linear kernel using cvxopt for binary classification. Refer to doc attached and report for clarification
 def linear_kernel_cvxopt(train_data,train_output,penalty):
 	m = len(train_data)
 	X_Y = np.multiply(train_data,train_output)
@@ -51,6 +54,7 @@ def linear_kernel_cvxopt(train_data,train_output,penalty):
 	solution = cvxopt.solvers.qp(P,q,G,h,A,b)
 	return solution
 
+# Calculating weights for linear kernel and storing them into files
 def calculate_linear_svm_params(kernel_soln,train_data,train_output,tolerance):
 	nSV = 0
 	(m,n) = (train_data.shape[0],train_data.shape[1])
@@ -83,6 +87,7 @@ def calculate_linear_svm_params(kernel_soln,train_data,train_output,tolerance):
 		print(str(b) + " is the value of b")
 	return (weight_matrix,b,nSV)
 
+# Calculates prediction over test_data
 def linear_kernel_svm_prediction(weight_matrix,b,test_data):
 	predicted = np.asmatrix(np.zeros((len(test_data),1),dtype=int))
 	val = np.dot(test_data,weight_matrix.transpose()) + b
@@ -113,6 +118,7 @@ def gaussian_kernel_cvxopt(train_data,train_output,gamma,penalty):
 	solution = cvxopt.solvers.qp(P,q,G,h,A,b)
 	return solution
 
+# Prediction using gaussian kernel. b depend on the test sample used; hence is calculated separately for each point
 def gaussian_prediction_cvxopt(kernel_soln,train_data,train_output,test_data,tolerance,gamma):
 	(m,n) = (train_data.shape[0],train_data.shape[1])
 	raveled = np.ravel(kernel_soln['x'])
@@ -151,7 +157,6 @@ def gaussian_prediction_cvxopt(kernel_soln,train_data,train_output,test_data,tol
 
 # Gaussian and linear kernel both using libsvm
 def libsvm_both(train_data,train_output,test_data,test_output,gamma,penalty):
-	# t_start = time.clock()
 	train_labels = []
 	train_input = train_data.tolist()
 	for j in range(train_output.shape[0]):
@@ -162,47 +167,19 @@ def libsvm_both(train_data,train_output,test_data,test_output,gamma,penalty):
 	for j in range(test_output.shape[0]):
 		test_labels.append(test_output[j,0])
 	
-	# time_stamp1 = time.clock()
-	# print(str(time_stamp1-t_start) + " is time taken for generating data in appropriate form")
-
 	problem = svm_problem(train_labels,train_input)
+	
 	linear_param = svm_parameter("-s 0 -c 1 -t 0")
 	linear_model = svm_train(problem,linear_param)
-	# t_linear_end = time.clock()
-	# print(str(t_linear_end-time_stamp1) + " for training linear kernel")
 	linear_pred_lbl, linear_pred_acc, linear_pred_val = svm_predict(test_labels,test_input,linear_model)
 
 	gaussian_param = svm_parameter("-s 0 -c " + str(penalty) + " -t 2 -g " + str(gamma))
 	gaussian_model = svm_train(problem,gaussian_param)
-	# t_gaussian_end = time.clock()
-	# print(str(t_gaussian_end-t_linear_end) + " for training gaussian kernel")
 	gaussian_pred_lbl, gaussian_pred_acc, gaussian_pred_val = svm_predict(test_labels,test_input,gaussian_model)
 
-# multiclass classification using cvxopt
-def gaussian_prediction_with_alphas(kernel_soln_x,train_data,train_output,test_data,tolerance,gamma):
-	prediction = np.asmatrix(np.ones((len(test_data),1),dtype=int))
-	raveled = np.asmatrix(kernel_soln_x)
-	
-	X_train = np.sum(np.multiply(train_data,train_data),axis=1)
-	X_test = np.sum(np.multiply(test_data,test_data),axis=1)
-	X_train_X_test = np.dot(train_data,test_data.transpose())
+# ENDING OF BINARY CLASSIFICATION FUNCTIONS. BELOW CODE IS FOR MULTICLASS CLASSIFICATION
 
-	alpha_x_label = np.multiply(train_output,np.multiply(raveled,raveled>tolerance))
-	langrangian_params = np.nonzero(raveled>tolerance)[0]
-
-	if len(langrangian_params)==0:
-		print("No support vectors found for tolerance value= " + str(tolerance))
-	else:
-		b = 0
-		for sv_idx in langrangian_params:
-			b+=(train_output[sv_idx,0] - np.sum(np.multiply(alpha_x_label,np.exp(-1*gamma*np.sum(np.multiply(train_data-train_data[sv_idx,:],train_data-train_data[sv_idx,:]),axis=1)))))
-		b = b/(float(len(langrangian_params)))
-		
-		for i in range(len(test_data)):
-			prediction[i,0] = np.sign(np.sum(np.multiply(alpha_x_label,np.exp(-1*gamma*(X_train - 2*X_train_X_test[:,i] + X_test[i,0])))) + b)
-
-	return prediction
-
+# multiclass classification using cvxopt and 45 SVMs i.e. one vs all classification
 def multiclass_svm_cvxopt(train_data_path,test_data_path,gamma,penalty,tolerance):
 	svm_dict = {}
 	num_max = 1
@@ -241,7 +218,32 @@ def multiclass_svm_cvxopt(train_data_path,test_data_path,gamma,penalty,tolerance
 		prediction[i] = np.argmax(prediction_dict[i])
 	return (test_output,np.array(prediction))
 
-# multiclass classification using libsvm
+# Helper function for multiclass classification using cvxopt
+def gaussian_prediction_with_alphas(kernel_soln_x,train_data,train_output,test_data,tolerance,gamma):
+	prediction = np.asmatrix(np.ones((len(test_data),1),dtype=int))
+	raveled = np.asmatrix(kernel_soln_x)
+	
+	X_train = np.sum(np.multiply(train_data,train_data),axis=1)
+	X_test = np.sum(np.multiply(test_data,test_data),axis=1)
+	X_train_X_test = np.dot(train_data,test_data.transpose())
+
+	alpha_x_label = np.multiply(train_output,np.multiply(raveled,raveled>tolerance))
+	langrangian_params = np.nonzero(raveled>tolerance)[0]
+
+	if len(langrangian_params)==0:
+		print("No support vectors found for tolerance value= " + str(tolerance))
+	else:
+		b = 0
+		for sv_idx in langrangian_params:
+			b+=(train_output[sv_idx,0] - np.sum(np.multiply(alpha_x_label,np.exp(-1*gamma*np.sum(np.multiply(train_data-train_data[sv_idx,:],train_data-train_data[sv_idx,:]),axis=1)))))
+		b = b/(float(len(langrangian_params)))
+		
+		for i in range(len(test_data)):
+			prediction[i,0] = np.sign(np.sum(np.multiply(alpha_x_label,np.exp(-1*gamma*(X_train - 2*X_train_X_test[:,i] + X_test[i,0])))) + b)
+
+	return prediction
+
+# multiclass classification using libsvm using 45 individual libsvms i.e. one vs all classification
 def multiclass_svm_libsvm_45(train_data_path,test_data_path,gamma,penalty):
 	svm_dict = {}
 	prediction_dict = {}
@@ -283,9 +285,8 @@ def multiclass_svm_libsvm_45(train_data_path,test_data_path,gamma,penalty):
 	
 	return(test_output,prediction)
 
+# Multiclass classification for 10 classes 0-9
 def multiclass_svm_libsvm(train_data_path,test_data_path,gamma,penalty):
-	# libsvm_training_start = time.clock()
-	
 	(train_data,train_output) = get_data(train_data_path,False,0,0)
 	(test_data,test_output) = get_data(test_data_path,False,0,0)
 
@@ -302,16 +303,11 @@ def multiclass_svm_libsvm(train_data_path,test_data_path,gamma,penalty):
 	problem = svm_problem(train_labels,train_input)
 	gaussian_param = svm_parameter("-s 0 -c " + str(penalty) + " -t 2 -g " + str(gamma))
 	gaussian_model = svm_train(problem,gaussian_param)
-	
-	libsvm_training_end = time.clock()
-	# print(str(libsvm_training_end - libsvm_training_start) + " is the training time for multiclass libsvm")
-	
 	svm_prediction_lbl,svm_prediction_acc,svm_prediction_val = svm_predict(test_labels,test_input,gaussian_model)
-	# print(svm_prediction_acc)
 	return (test_output,svm_prediction_lbl)
 
+# MAIN FUNCTION
 def main():
-	time_init = time.clock()
 	train_data_path = sys.argv[1]
 	test_data_path = sys.argv[2]
 	classification = sys.argv[3]
@@ -335,8 +331,6 @@ def main():
 			print("Confusion Matrix")
 			print(confatrix)
 			# draw_confusion(confatrix)
-			# tend = time.clock()
-			# print(str(tend-time_init) + " is time taken")
 		elif part =='b':
 			gamma = 0.05
 			penalty = 1
@@ -349,8 +343,6 @@ def main():
 			print("Confusion Matrix")
 			print(confatrix)
 			# draw_confusion(confatrix)
-			# tend = time.clock()
-			# print(str(tend-time_init) + " is time taken")
 		elif part == 'c':
 			gamma = 0.05
 			penalty = 1
@@ -364,13 +356,9 @@ def main():
 			penalty = 1
 			tolerance = 1e-6
 			print("tolerance value for gaussian kernel for multiclass classification= " + str(tolerance))
-			t_start = time.clock()
 			(test_output,prediction) = multiclass_svm_cvxopt(train_data_path,test_data_path,gamma,penalty,tolerance)
-			t_end = time.clock()
 			confatrix = confusion_matrix(test_output,prediction)
 			print(confatrix)
-			print("time taken by cvxopt multiclass= " + str(t_end-t_start))
-
 		elif part =='b':
 			gamma = 0.05
 			penalty = 1
@@ -381,7 +369,6 @@ def main():
 		elif part == 'd':
 			gamma = 0.05
 			penalty_array = [0.00001,0.01,1,5,10]
-			# penalty_array = [0.01,1,5,10]
 			validation_set_accuracy = np.zeros((1,5),dtype=float)
 			test_accuracy = np.zeros((1,5),dtype=float)
 			
@@ -414,10 +401,8 @@ def main():
 				gaussian_param = svm_parameter("-s 0 -c " + str(penalty) + " -t 2 -g " + str(gamma))
 				gaussian_model = svm_train(problem,gaussian_param)
 				svm_prediction_lbl,svm_prediction_acc,svm_prediction_val = svm_predict(test_labels,test_input,gaussian_model)
-				# print(svm_prediction_acc)
 				test_accuracy[i] = svm_prediction_acc[0]
 				svm_prediction_lbl,svm_prediction_acc,svm_prediction_val = svm_predict(validation_labels,validation_input,gaussian_model)
-				# print(svm_prediction_acc)
 				validation_set_accuracy[i] = svm_prediction_acc[0]
 			print("Validation Set Accuracy")
 			print(validation_set_accuracy)
@@ -425,8 +410,6 @@ def main():
 			print(test_accuracy)
 		else:
 			print("No such part for multiclass classification")
-	
-	return
 
 if __name__ == "__main__":
 	main()
