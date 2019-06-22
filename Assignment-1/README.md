@@ -1,4 +1,5 @@
 # Assignment-1
+Basic regression and classification algorithms from scratch in python
 
 ## Commands
 Download all the files and cd into the home directory.
