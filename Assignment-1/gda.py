@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy import linalg
 from decimal import Decimal
 
+# Reading from csv files
 def read_params(x_path,y_path):
   x_data = pd.read_csv(x_path,header=None,sep="\s+",dtype=float)
   y_data = pd.read_csv(y_path,header=None,sep="\s+")
@@ -16,16 +17,17 @@ def read_params(x_path,y_path):
   y = modify(y)
   return (x,y)
 
+# Normalization function
 def normalize(mat):
   mean = np.mean(mat,axis=0)
   var = np.var(mat,axis=0)
   mat-=mean
-  for i in range (len(mat)):
-    mat[i,:] = np.divide(mat[i,:],var)
+  mat = np.divide(mat,var)
   z = 1 + np.zeros((mat.shape[0],1),dtype=float)
   z = np.hstack((z,mat))
   return z
 
+# For modifying class label
 def modify(y):
   z = np.asmatrix(np.zeros((y.shape[0],y.shape[1]),dtype=int,order='F'))
   for i in range(len(y)):
@@ -35,10 +37,12 @@ def modify(y):
       z[i,0] = 0
   return z
 
+# Covariance matrix computation
 def compute_covariance_matrix(class_data,mean_mat,var_mat):
   z = np.dot((class_data-mean_mat).transpose(),(class_data-mean_mat))
   return z/len(class_data)
 
+# Linear classifier plotting
 def plot_linear(class_0,class_1,mu_0,mu_1,sigma):
   # Plotting the initially given data
   plt.scatter(np.array(class_1)[:,1],np.array(class_1)[:,2],c='g',label='Alaska (y=1)')
@@ -58,9 +62,10 @@ def plot_linear(class_0,class_1,mu_0,mu_1,sigma):
   plt.plot(x1,x2,label='Linear Hypothesis')
   
   plt.legend()
-  # plt.savefig('gda_linear.png',dpi=200)
+  plt.savefig('gda_linear.png',dpi=200)
   plt.show()
 
+# Quadrtic classifier plotting
 def plot_quadratic(class_0,class_1,mu_0,mu_1,sigma_0,sigma_1):
   # Plotting the initially given data
   plt.scatter(np.array(class_1)[:,1],np.array(class_1)[:,2],c='g',label='Alaska (y==1)')
@@ -102,9 +107,10 @@ def plot_quadratic(class_0,class_1,mu_0,mu_1,sigma_0,sigma_1):
   plt.plot(np.array(class_fin)[:,0],np.array(class_fin)[:,1])
 
   plt.legend()
-  # plt.savefig('gda_quadratic.png',dpi=200)
+  plt.savefig('gda_quadratic.png',dpi=200)
   plt.show()
 
+# MAIN FUNCTION
 def main():
   # Taking parameters from command line
   x_path = sys.argv[1]

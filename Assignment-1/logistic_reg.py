@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import linalg
-from decimal import Decimal
 
+# Reading parameters from csv files
 def read_params(x_path,y_path):
   x_data = pd.read_csv(x_path,header=None)
   y_data = pd.read_csv(y_path,header=None)
@@ -13,42 +13,36 @@ def read_params(x_path,y_path):
   x = normalize(x)
   return (x,y,np.array(x_data),np.array(y_data))
 
+# Normalization function
 def normalize(mat):
   mean = np.mean(mat,axis=0)
   var = np.var(mat,axis=0)
   mat-=mean
-  for i in range (len(mat)):
-    mat[i,:] = np.divide(mat[i,:],var)
+  mat = np.divide(mat,var)
   z = 1 + np.zeros((mat.shape[0],1),dtype=float)
   z = np.hstack((z,mat))
   return z
 
+# Main algorithm for newton's method
 def algo(x,y,theta):
   # Current probability of y==1
   prediction = 1/(1+np.exp(-1*np.dot(x,theta)))
   
   # h_1_h = h(x)*(1-h(x))
   h_1_h = np.multiply(prediction,1-prediction)
-  
-  # diff = y - h(x)
   diff = y - prediction
-  
-  # first derivative
+
+  # computing the first derivative
   first_der = np.dot(x.transpose(),diff)
   
   # computing the second derivative
-  # 
-  second_der = np.asmatrix(np.zeros((x.shape[1],x.shape[1]),dtype=float,order='F'))
-  for i in range(x.shape[1]):
-    for j in range(x.shape[1]):
-      for k in range(len(x)):
-        second_der[i,j]+=x[k,i]*x[k,j]*h_1_h[k,0]
+  second_der = np.dot(np.transpose(x),np.multiply(x,h_1_h))
   second_der = np.linalg.pinv(-1*second_der)
   
   # Updating theta vector using newton's method rule
   theta-=np.dot(second_der,first_der)
 
-
+# Plotting the graph
 def curve_plot(x,y,theta):
   # identifying data-points belonging to different classes
   class_1 = []
@@ -74,9 +68,10 @@ def curve_plot(x,y,theta):
   plt.ylabel('x2')
   plt.legend()
   plt.title('Logistic Regression')
-  # plt.savefig('logistic_reg.png',dpi=200)
+  plt.savefig('logistic_reg.png',dpi=200)
   plt.show()
 
+# MAIN FUNCTION
 def main():
   # Taking parameters from command line
   x_path = sys.argv[1]
@@ -91,7 +86,6 @@ def main():
 
   # Contains the probability of this data-point belonging to positive class i.e. y==1
   val = 1/(1+np.exp(-1*np.dot(x,theta)))
-  # print(val)
   
   # Plotting
   curve_plot(x,y,theta)
