@@ -178,16 +178,16 @@ def get_test_data(val_or_test,reward_avail):
 		return val_x,data_dash
 
 def main():
-	# dataset = generate_pca_dataset("../train_dataset")
-	# pca_dataset_pickle_file = open("pca_dataset_pickle",'rb')
-	# dataset = pickle.load(pca_dataset_pickle_file)
-	# my_pca = PCA(n_components=50)
-	# my_pca.fit(dataset)
-	# del(dataset)
-	# pca_transform_folder_wise("../train_dataset",my_pca)
-	# synthesize_svm_data("../validation_dataset",my_pca,"pca_val_normalized",1)
-	# synthesize_svm_data("../test_dataset",my_pca,"pca_test_normalized",0)
-	# del(my_pca)
+	dataset = generate_pca_dataset("../train_dataset")
+	pca_dataset_pickle_file = open("pca_dataset_pickle",'rb')
+	dataset = pickle.load(pca_dataset_pickle_file)
+	my_pca = PCA(n_components=50)
+	my_pca.fit(dataset)
+	del(dataset)
+	pca_transform_folder_wise("../train_dataset",my_pca)
+	synthesize_svm_data("../validation_dataset",my_pca,"pca_val_normalized",1)
+	synthesize_svm_data("../test_dataset",my_pca,"pca_test_normalized",0)
+	del(my_pca)
 	
 	time1 = time.clock()
 	num_folders = 500
