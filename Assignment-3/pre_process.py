@@ -14,9 +14,6 @@ def generate_ohe(data_x,name):
 		new_data[i,85+data_x[i,-1]] = 1
 	pd.DataFrame(np.array(new_data)).to_csv(name,header=None,index=None)
 
-def generate_ohe_inbuilt(data_x,name):
-	return
-
 def readfile(datapath,name):
 	data = pd.read_csv(datapath,header=None)
 	datashape = data.shape
