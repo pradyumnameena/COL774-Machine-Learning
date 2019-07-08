@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 
 # Reading the input files into matrices. 
 # Distance specifies the number of classes essentially (offset because of one hot encoding)
+# Distance is the last set of columns which are to be used as output labels
 def read_file(datapath,distance):
 	full_data = pd.read_csv(datapath,header=None,dtype=int)
 	full_data_arr = np.array(full_data)
@@ -20,6 +21,7 @@ def read_file(datapath,distance):
 
 # Activation functions and their derivatives
 def sigmoid_activation(a):
+	# Following implementation avoids overflows
 	a1 = np.multiply(a>=0,a)
 	a2 = np.multiply(a<0,a)
 	return np.add(1/(1+np.exp(-a1)),np.divide(np.exp(a2),(1+np.exp(a2)))) - 0.5
@@ -43,6 +45,7 @@ def leaky_relu_derivative(a):
 def normalization(mat):
 	mean = np.mean(mat,axis=0)
 	var = np.var(mat,axis=0)
+	# To avoid division by zero add 1 where it's 0
 	var = var + np.multiply(1,var==0)
 	return np.divide(np.subtract(mat,mean),var)
 
@@ -96,7 +99,7 @@ def loss_function(output_layer_output,actual_output):
 	loss0 = np.multiply(actual_output,np.log(np.add(output_layer_output,np.multiply(1,output_layer_output==0))))
 	loss1_0 = np.multiply(1-actual_output,np.log(np.add(1-output_layer_output,np.multiply(1,output_layer_output==1))))
 	loss = -1*np.add(loss0,loss1_0)
-	mean_loss_over_batch = np.mean(axis=1)
+	mean_loss_over_batch = np.mean(loss,axis=1)
 	return np.sqrt(np.dot(np.transpose(mean_loss_over_batch),mean_loss_over_batch)[0,0])
 
 # Back propagation function
@@ -212,7 +215,7 @@ def main():
 			forward_pass  = forward_prop(params,train_x[begin:end,:],activation)
 			loss_mag = loss_function(forward_pass["a"+str((int)(len(params)/2))],np.transpose(train_y[begin:end,:]))
 			params = backward_prop(params,forward_pass,learning_rate,np.transpose(train_y[begin:end,:]),activation)
-			error+=(loss_mag/(end-begin+1))
+			error+=((1.0*loss_mag)/(end-begin+1))
 		print(str(counter) + " : " + str(error))
 		cost_list.append(error)
 		if learning_rate_variation=="variable" and len(cost_list)>=3:

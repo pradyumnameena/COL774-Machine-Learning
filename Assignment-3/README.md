@@ -1,5 +1,5 @@
 # Assignment-3
-Implemented the following in this assignment:
+Implemented the following from scratch in this assignment:
 1. Decision Trees for credit card defaults
 2. Neural Network for poker hand dataset
 

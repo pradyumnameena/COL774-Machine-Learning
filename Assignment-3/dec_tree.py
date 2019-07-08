@@ -25,20 +25,16 @@ class tree_Node:
 		self.answer = answer
 		self.median = median
 
-def read_file(datapath,array_form):
+# Reading the file
+def read_file(datapath):
 	full_data = pd.read_csv(datapath)
 	data_shape = full_data.shape
 	full_data_arr = np.array(full_data.iloc[1:data_shape[0],:],dtype=int)
-	
-	if array_form==False:
-		x = np.asmatrix(full_data_arr[:,1:data_shape[1]-1])
-		y = np.asmatrix(full_data_arr[:,data_shape[1]-1:data_shape[1]])
-		return (x,y)
-	else:
-		x = full_data_arr[:,1:data_shape[1]-1]
-		y = full_data_arr[:,data_shape[1]-1:data_shape[1]]
-		return (x,y)
+	x = full_data_arr[:,1:data_shape[1]-1]
+	y = full_data_arr[:,data_shape[1]-1:data_shape[1]]
+	return (x,y)
 
+# generates one hot encoding
 def ohe_func(mat,categorical_features,num_categories,negative_cols):
 	for i in negative_cols:
 		mat[:,i]+=2
@@ -57,6 +53,7 @@ def ohe_func(mat,categorical_features,num_categories,negative_cols):
 			new_index+=1
 	return ret_mat
 
+# preprcessing based on median (1 if x>=median else 0) for continuous columns
 def pre_processing(mat,non_continuous_columns,negative_cols):
 	median = np.asmatrix(np.median(mat,axis=0),dtype=int)
 	new_data = np.multiply(np.asmatrix(np.ones(mat.shape,dtype=int)),mat>=median)
@@ -66,22 +63,26 @@ def pre_processing(mat,non_continuous_columns,negative_cols):
 		new_data[:,i]+=2
 	return new_data
 
+# To handle negative columns
 def pre_processingV2(mat,negative_cols):
 	for i in negative_cols:
 		mat[:,i]+=2
 	return mat
 
+# Entropy function
 def my_entropy(datapoints_indices,data_y):
 	new_list = np.ravel(data_y[datapoints_indices])
 	bin_count = np.divide(np.bincount(new_list),1.0*len(datapoints_indices))
 	bin_count = np.add(bin_count,np.multiply(np.ones(bin_count.shape,dtype=int),bin_count==0))
 	return -1*np.sum(np.multiply(bin_count,np.divide(np.log(bin_count),np.log(2))))
 
+# Split function based on number of unique values of feature_index
 def split_parent(feature_index,datapoints_indices,data_x):
 	new_data2 = data_x[datapoints_indices,:][:,feature_index]
 	dicti = {c: [datapoints_indices[x] for x in np.where(new_data2==c)[0]] for c in np.unique(np.ravel(new_data2))}
 	return dicti
-	
+
+# Information gain function
 def info_gain(feature_index,datapoints_indices,data_x,data_y,modified):
 	# change for part c
 	dicti = {}
@@ -97,6 +98,7 @@ def info_gain(feature_index,datapoints_indices,data_x,data_y,modified):
 		ig -= (np.divide(1.0*len(dicti[prob]),len(datapoints_indices)) * my_entropy(dicti[prob],data_y))
 	return ig
 
+# Selecting the best feature and its information gain
 def best_feature(datapoints_indices,data_x,data_y,modified):
 	max_gain = -1
 	best_feature = -1
@@ -108,6 +110,7 @@ def best_feature(datapoints_indices,data_x,data_y,modified):
 			best_feature = i
 	return best_feature,max_gain
 
+# Function to print tree
 def print_tree(tree):
 	if tree.parent==None:
 		print("Root Node. Feature Used -> " + str(tree.feature_index))
@@ -130,6 +133,7 @@ def print_tree(tree):
 		for c in tree.childs:
 			print_tree(c)
 
+# Prediction function for a single point
 def get_class(tree,data_point,current_depth,allowed_depth,modified,max_depth):
 	if tree.feature_index==-1 or current_depth==allowed_depth or current_depth==max_depth:
 		return tree.answer
@@ -145,12 +149,14 @@ def get_class(tree,data_point,current_depth,allowed_depth,modified,max_depth):
 					return get_class(tree.childs[i],data_point,current_depth+1,allowed_depth,modified,max_depth)
 		return tree.answer
 
+# Overall prediction
 def predict(tree,test_x,modified,allowed_depth,max_depth):
 	predicted = np.asmatrix(np.zeros((test_x.shape[0],1),dtype=int))
 	for j in range(test_x.shape[0]):
 		predicted[j,0] = get_class(tree,np.ravel(test_x[j,:]),0,allowed_depth,modified,max_depth)
 	return predicted
 
+# BFS traversal for getting all nodes of the tree
 def breadth_first_traversal(tree):
 	node_list = []
 	visited_list = [tree]
@@ -161,6 +167,7 @@ def breadth_first_traversal(tree):
 			visited_list.append(child)
 	return node_list
 
+# getting height of the tree
 def get_max_depth(tree):
 	if tree.feature_index==-1 or len(tree.childs)==0:
 		return 1
@@ -170,6 +177,7 @@ def get_max_depth(tree):
 			new_list.append(get_max_depth(child))
 		return 1+np.max(new_list)
 
+# getting number of nodes in the tree
 def get_node_count(tree):
 	if tree.feature_index==-1:
 		return 1
@@ -179,6 +187,7 @@ def get_node_count(tree):
 			rv+= get_node_count(child)
 		return rv+1
 
+# Functions to grow the tree depending on the part
 def grow_tree(train_x,train_y,datapoints_indices,parent=None):
 	new_list = np.ravel(train_y[datapoints_indices])
 	
@@ -230,16 +239,25 @@ def grow_treeV2(train_x,train_y,datapoints_indices,parent=None):
 		return node
 
 def main():
+	# Taking input from console
 	part_num = (int)(sys.argv[1])
 	train_datapath = sys.argv[2]
 	test_datapath = sys.argv[3]
 	validation_datapath = sys.argv[4]
 
+	# Reading the dataset
+	(train_x,train_y) = read_file(train_datapath,False)
+	(test_x,test_y) = read_file(test_datapath,False)
+	(val_x,val_y) = read_file(validation_datapath,False)
+	if(part_num>=4):
+		train_x = np.asmatrix(train_x)
+		train_y = np.asmatrix(train_y)
+		test_x = np.asmatrix(test_x)
+		test_y = np.asmatrix(test_y)
+		val_x = np.asmatrix(val_x)
+		val_y = np.asmatrix(val_y)
+	
 	if part_num==1:
-		(train_x,train_y) = read_file(train_datapath,False)
-		(test_x,test_y) = read_file(test_datapath,False)
-		(val_x,val_y) = read_file(validation_datapath,False)
-		
 		non_continuous_columns = [1,2,3,5,6,7,8,9,10]
 		negative_cols = [5,6,7,8,9,10]
 		train_x_new = pre_processing(train_x,non_continuous_columns,negative_cols)
@@ -293,10 +311,6 @@ def main():
 		fig.savefig("Graph_Part1"+'.png')	
 	
 	elif part_num==2:
-		(train_x,train_y) = read_file(train_datapath,False)
-		(test_x,test_y) = read_file(test_datapath,False)
-		(val_x,val_y) = read_file(validation_datapath,False)
-		
 		non_continuous_columns = [1,2,3,5,6,7,8,9,10]
 		negative_cols = [5,6,7,8,9,10]
 		train_x_new = pre_processing(train_x,non_continuous_columns,negative_cols)
@@ -388,10 +402,6 @@ def main():
 		fig.savefig("Graph_Part2"+'.png')
 
 	elif part_num==3:
-		(train_x,train_y) = read_file(train_datapath,False)
-		(test_x,test_y) = read_file(test_datapath,False)
-		(val_x,val_y) = read_file(validation_datapath,False)
-		
 		negative_cols = [5,6,7,8,9,10]
 		train_x_new = pre_processingV2(train_x,negative_cols)
 		test_x_new = pre_processingV2(test_x,negative_cols)
@@ -439,10 +449,6 @@ def main():
 		fig.savefig("Graph_Part3_2"+'.png')
 
 	elif part_num==4:
-		(train_x,train_y) = read_file(train_datapath,True)
-		(test_x,test_y) = read_file(test_datapath,True)
-		(val_x,val_y) = read_file(validation_datapath,True)
-
 		# SET OF BEST FEATURE VALUES. To directly use them comment the nested for loop section below
 		best_accuracy = -1
 		best_depth = 6
@@ -542,10 +548,7 @@ def main():
 		categorical_features = [1,2,3,5,6,7,8,9,10]
 		num_categories = [2,4,3,12,12,12,12,12,12]
 		negative_cols = [5,6,7,8,9,10]
-		(train_x,train_y) = read_file(train_datapath,True)
-		(test_x,test_y) = read_file(test_datapath,True)
-		(val_x,val_y) = read_file(validation_datapath,True)
-
+		
 		train_x_new = ohe_func(train_x,categorical_features,num_categories,negative_cols)
 		test_x_new = ohe_func(test_x,categorical_features,num_categories,negative_cols)
 		val_x_new = ohe_func(val_x,categorical_features,num_categories,negative_cols)
@@ -579,10 +582,7 @@ def main():
 		categorical_features = [1,2,3,5,6,7,8,9,10]
 		num_categories = [2,4,3,12,12,12,12,12,12]
 		negative_cols = [5,6,7,8,9,10]
-		(train_x,train_y) = read_file(train_datapath,True)
-		(test_x,test_y) = read_file(test_datapath,True)
-		(val_x,val_y) = read_file(validation_datapath,True)
-
+		
 		train_x_new = ohe_func(train_x,categorical_features,num_categories,negative_cols)
 		test_x_new = ohe_func(test_x,categorical_features,num_categories,negative_cols)
 		val_x_new = ohe_func(val_x,categorical_features,num_categories,negative_cols)
