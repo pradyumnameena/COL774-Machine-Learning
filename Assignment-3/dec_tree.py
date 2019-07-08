@@ -172,20 +172,16 @@ def get_max_depth(tree):
 	if tree.feature_index==-1 or len(tree.childs)==0:
 		return 1
 	else:
-		new_list = []
-		for child in tree.childs:
-			new_list.append(get_max_depth(child))
-		return 1+np.max(new_list)
+		child_depths = [get_max_depth(child) for child in tree.childs]
+		return 1+max(child_depths)
 
 # getting number of nodes in the tree
 def get_node_count(tree):
 	if tree.feature_index==-1:
 		return 1
 	else:
-		rv = 0
-		for child in tree.childs:
-			rv+= get_node_count(child)
-		return rv+1
+		child_node_count = [get_node_count(child) for child in tree.childs]
+		return 1+sum(child_node_count)
 
 # Functions to grow the tree depending on the part
 def grow_tree(train_x,train_y,datapoints_indices,parent=None):
