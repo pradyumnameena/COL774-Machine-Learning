@@ -179,7 +179,7 @@ def libsvm_both(train_data,train_output,test_data,test_output,gamma,penalty):
 
 # ENDING OF BINARY CLASSIFICATION FUNCTIONS. BELOW CODE IS FOR MULTICLASS CLASSIFICATION
 
-# multiclass classification using cvxopt and 45 SVMs i.e. one vs all classification
+# multiclass classification using cvxopt and 45 SVMs i.e. one vs one classification
 def multiclass_svm_cvxopt(train_data_path,test_data_path,gamma,penalty,tolerance):
 	svm_dict = {}
 	num_max = 1
